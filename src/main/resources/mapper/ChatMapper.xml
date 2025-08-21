@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="org.example.easychat.Mapper.ChatMapper">
+
+    <resultMap id="BaseResultMap" type="org.example.easychat.Entity.ChatHistory">
+        <id property="id" column="id" />
+        <result property="senderId" column="sender_id" />
+        <result property="receiverId" column="receiver_id" />
+        <result property="sessionId" column="session_id" />
+        <result property="type" column="type" />
+        <result property="content" column="content" />
+        <result property="hasRead" column="has_read" />
+        <result property="showTime" column="show_time" />
+        <result property="createTime" column="create_time" />
+    </resultMap>
+
+    <select id="getLatestChatHistory" resultType="org.example.easychat.Entity.ChatHistory">
+        select * from chat_histories where receiver_id = #{userId} order by create_time desc limit 1
+    </select>
+
+    <select id="getChats" resultType="org.example.easychat.Entity.ChatSession">
+        SELECT
+            uf.session_id,
+            uf.user_id as userId,
+            uf.friend_user_id,
+            uf.friend_remark,
+            u.nickname as friend_nick_name,
+            u.avatar as friend_avatar,
+            MAX(ch.create_time) as create_time
+        FROM user_friends uf
+        LEFT JOIN users u ON u.id = uf.friend_user_id
+        LEFT JOIN chat_histories ch ON ch.session_id = uf.session_id
+        WHERE uf.user_id = #{userId}
+        GROUP BY uf.session_id, uf.user_id, uf.friend_user_id, uf.friend_remark, u.nickname, u.avatar
+    </select>
+    
+
+    <select id="getLatestChatHistoryBySessionId" resultType="org.example.easychat.Entity.ChatHistory">
+        select *
+        from chat_histories ch where ch.session_id = #{sessionId}
+        order by ch.create_time desc limit 1
+    </select>
+    <select id="getLatestChatMessage" resultType="org.example.easychat.Entity.Message">
+        select sender_id, receiver_id, session_id, type, content, has_read, show_time, create_time
+        from chat_histories where session_id = #{sessionId}
+        order by create_time desc limit 1
+    </select>
+
+    <insert id="insert" parameterType="org.example.easychat.Entity.ChatHistory">
+        INSERT INTO chat_histories
+        ( id, sender_id, receiver_id, session_id, type, content, has_read, show_time, create_time )
+        VALUES
+        ( #{id}, #{senderId}, #{receiverId}, #{sessionId}, #{type}, #{content}, #{hasRead}, #{showTime}, #{createTime} )
+    </insert>
+
+</mapper>

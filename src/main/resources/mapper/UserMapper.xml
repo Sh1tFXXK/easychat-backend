@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="org.example.easychat.Mapper.UserMapper">
+
+    <!-- 结果映射：定义数据库字段与Java对象属性的映射关系 -->
+    <resultMap id="UserResultMap" type="org.example.easychat.Entity.User">
+        <id property="id" column="id"/>
+        <result property="username" column="username"/>
+        <result property="nickName" column="nickname"/>
+        <result property="password" column="password"/>
+        <result property="email" column="email"/>
+        <result property="phone" column="phone"/>
+        <result property="avatar" column="avatar"/>
+        <result property="gender" column="gender"/>
+        <result property="birthday" column="birthday"/>
+        <result property="region" column="region"/>
+        <result property="introduction" column="introduction"/>
+        <result property="status" column="status"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="tags" column="tags"/>
+    </resultMap>
+
+    <!-- 插入用户信息 -->
+    <insert id="insertUser" parameterType="org.example.easychat.Entity.User">
+        INSERT INTO users (id, username, nickname, password, email, phone, avatar, gender, birthday, region, introduction, status, create_time, update_time)
+        VALUES (#{id}, #{username}, #{nickname}, #{password}, #{email}, #{phone}, #{avatar}, #{gender}, #{birthday}, #{region}, #{introduction}, #{status}, #{createTime}, #{updateTime})
+    </insert>
+
+    <!-- 根据用户名查询用户 -->
+    <select id="getUserByUsername" parameterType="string" resultMap="UserResultMap">
+        SELECT * FROM users WHERE username = #{username}
+    </select>
+
+    <!-- 更新用户状态 -->
+    <update id="updateUserStatus">
+        UPDATE users
+        SET status = #{status}, update_time = NOW()
+        WHERE id = #{userId}
+    </update>
+    <update id="updateFriendStatus">
+        UPDATE friend_verifies
+        SET status = #{i}
+        WHERE sender_id = #{friendId} AND receiver_id = #{userId}
+    </update>
+
+    <!-- 复杂查询：根据多个条件查询用户 -->
+    <select id="findUsersByCondition" resultMap="UserResultMap">
+        SELECT * FROM users
+        <where>
+            <if test="username != null and username != ''">
+                AND username LIKE CONCAT('%', #{username}, '%')
+            </if>
+            <if test="status != null">
+                AND status = #{status}
+            </if>
+            <if test="region != null and region != ''">
+                AND region = #{region}
+            </if>
+        </where>
+        ORDER BY create_time DESC
+    </select>
+
+    <!-- 批量插入用户 -->
+    <insert id="batchInsertUsers" parameterType="list">
+        INSERT INTO users (username, password, email, status, create_time)
+        VALUES
+        <foreach collection="list" item="user" separator=",">
+            (#{user.username}, #{user.password}, #{user.email}, #{user.status}, NOW())
+        </foreach>
+    </insert>
+    <insert id="insertUserFriend">
+        INSERT INTO user_friends (user_id, friend_user_id, friend_remark, session_id, create_time)
+        VALUES (#{userId}, #{friendInfo.friendUserId}, #{friendInfo.friendRemark}, #{friendInfo.sessionId}, #{friendInfo.createTime})
+    </insert>
+    <insert id="insertFriendVerify" parameterType="org.example.easychat.dto.friendVerifyDto">
+        INSERT INTO friend_verifies
+        (sender_id, receiver_id, apply_reason, remark, status, has_read, create_time)
+        VALUES
+        (#{senderId}, #{receiverId}, #{applyReason}, #{remark}, #{status}, #{hasRead}, #{createTime})
+    </insert>
+
+
+    <!-- 分页查询在线用户 -->
+    <select id="getOnlineUsers" resultMap="UserResultMap">
+        SELECT u.*,
+               (SELECT COUNT(*) FROM user_friends f WHERE f.user_id = u.id) as friend_count
+        FROM users u
+        WHERE u.status = 1
+        ORDER BY u.update_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <resultMap id="FriendsDtoResultMap" type="org.example.easychat.dto.friendsDto">
+        <id property="friendUserId" column="friend_user_id"/>
+        <result property="friendRemark" column="friend_remark"/>
+        <result property="friendAvatar" column="avatar"/>
+        <result property="introduction" column="introduction"/>
+        <result property="sessionId" column="session_id"/>
+        <result property="sessionTime" column="session_time"/>
+    </resultMap>
+
+    <select id="getUserFriendsBaseInfo" resultMap="FriendsDtoResultMap">
+        SELECT
+            f.friend_user_id,
+            f.friend_remark,
+            f.session_id,
+            f.session_time,
+            u.avatar,
+            u.introduction
+        FROM
+            user_friends f
+                JOIN
+            users u ON f.friend_user_id = u.id
+        WHERE
+            f.user_id = #{userId}
+    </select>
+
+    <select id="findTagsForUserIds" resultType="java.util.Map">
+        SELECT user_id, tag FROM user_tags
+        WHERE user_id IN
+        <foreach item="id" collection="userIds" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <select id="getUserFriendsIds" resultType="java.lang.String">
+        SELECT friend_user_id FROM user_friends WHERE user_id = #{userId}
+    </select>
+
+    <select id="getUserFriendVerifyIds" resultType="java.lang.String">
+        select friend_verifies.sender_id from friend_verifies where friend_verifies.receiver_id = #{userId} and friend_verifies.status = 0
+    </select>
+
+    <resultMap id="FriendVerifyDtoResultMap" type="org.example.easychat.dto.friendVerifyDto">
+        <result property="senderId" column="sender_id"/>
+        <result property="senderNickName" column="sender_nickname"/>
+        <result property="senderAvatar" column="sender_avatar"/>
+        <result property="receiverId" column="receiver_id"/>
+        <result property="receiverNickName" column="receiver_nickname"/>
+        <result property="receiverAvatar" column="receiver_avatar"/>
+        <result property="applyReason" column="apply_reason"/>
+        <result property="remark" column="remark"/>
+        <result property="status" column="status"/>
+        <result property="hasRead" column="has_read"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <select id="getFriendVerifications" resultMap="FriendVerifyDtoResultMap">
+        SELECT
+            fv.sender_id,
+            su.nickname AS sender_nickname,
+            su.avatar AS sender_avatar,
+            fv.receiver_id,
+            ru.nickname AS receiver_nickname,
+            ru.avatar AS receiver_avatar,
+            fv.apply_reason,
+            fv.remark,
+            fv.status,
+            fv.has_read,
+            fv.create_time
+        FROM friend_verifies fv
+        JOIN users su ON fv.sender_id = su.id
+        JOIN users ru ON fv.receiver_id = ru.id
+        WHERE fv.receiver_id = #{userId} AND fv.status = 0
+    </select>
+    <select id="getUserFriends" resultMap="UserResultMap">
+        SELECT u.*
+        FROM users u
+        JOIN user_friends f ON u.id = f.friend_user_id
+        WHERE f.user_id = #{userId}
+    </select>
+    <select id="getUserWithTagsById" resultMap="UserResultMap">
+        SELECT u.id,
+               u.username,
+               u.nickname,
+               u.password,
+               u.email,
+               u.phone,
+               u.avatar,
+               u.gender,
+               u.birthday,
+               u.region,
+               u.introduction,
+               u.status,
+               u.create_time,
+               u.update_time,
+               (SELECT GROUP_CONCAT(t.tag) FROM user_tags t WHERE t.user_id = u.id) AS tags
+        FROM users u
+        WHERE u.id = #{userId}
+    </select>
+
+</mapper>

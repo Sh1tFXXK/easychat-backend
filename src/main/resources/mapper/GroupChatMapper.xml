@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.easychat.Mapper.GroupChatMapper">
+    <resultMap id="BaseResultMap" type="org.example.easychat.dto.createGroupDto">
+    </resultMap>
+    <insert id="insertGroup" useGeneratedKeys="true" keyProperty="groupId" keyColumn="group_id">
+        INSERT INTO `groups` (group_name, owner_id)
+        VALUES (#{groupName}, #{ownerId})
+    </insert>
+
+    <insert id="batchInsertGroupMembers">
+        INSERT INTO group_members (group_id, user_id, role)
+        VALUES
+        <foreach collection="groupMembers" item="member" separator=",">
+            (#{member.groupId}, #{member.userId}, #{member.role})
+        </foreach>
+    </insert>
+    <insert id="batchInsertGroupMembersByIds">
+        INSERT INTO group_members (group_id, user_id, role, created_at)
+        VALUES
+        <foreach collection="userIds" item="userId" separator=",">
+            (#{groupId}, #{userId}, 'member', NOW())
+        </foreach>
+    </insert>
+    <update id="updateGroup">
+        UPDATE `groups`
+        SET group_name = #{groupName},
+            avatar = #{avatar},
+            announcement = #{announcement}
+        WHERE group_id = #{groupId}
+    </update>
+
+    <!-- 获取某用户加入的所有群（成员表连接） -->
+    <select id="selectGroupsByUserId" resultType="org.example.easychat.Entity.Group">
+        SELECT g.group_id   AS groupId,
+               g.group_name AS groupName,
+               g.owner_id   AS ownerId,
+               g.created_at AS createdAt,
+               g.avatar     AS avatar,
+               g.announcement AS announcement
+        FROM `groups` g
+        JOIN `group_members` gm ON gm.group_id = g.group_id
+        WHERE gm.user_id = #{userId}
+        ORDER BY g.created_at DESC
+    </select>
+
+    <!-- 获取群基本信息 -->
+    <select id="selectGroupById" resultType="org.example.easychat.Entity.Group">
+        SELECT g.group_id   AS groupId,
+               g.group_name AS groupName,
+               g.owner_id   AS ownerId,
+               g.created_at AS createdAt,
+               g.avatar     AS avatar,
+               g.announcement AS announcement
+        FROM `groups` g
+        WHERE g.group_id = #{groupId}
+    </select>
+
+    <!-- 获取群成员列表（只返回 userId/role，若需昵称头像可在 Service 里 join users 表） -->
+    <select id="selectGroupMembers" resultType="org.example.easychat.Entity.GroupMember">
+        SELECT user_id AS userId,
+               group_id AS groupId,
+               role
+        FROM `group_members`
+        WHERE group_id = #{groupId}
+        ORDER BY role DESC
+    </select>
+
+</mapper>
