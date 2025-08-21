@@ -1,9 +1,12 @@
-HELP.md
+# 构建输出目录（Maven/Gradle 通用）
 target/
-.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+# Maven Wrapper（仅忽略 jar，保留配置文件）
+.mvn/wrapper/maven-wrapper.jar
+
+# IDE 相关（不同编辑器的临时文件、配置目录）
 ### STS ###
 .apt_generated
 .classpath
@@ -32,9 +35,19 @@ build/
 ### VS Code ###
 .vscode/
 
-# .gitignore 中新增
+# 本地敏感配置（新增）
 src/main/resources/application-local.properties
 
-.gitignore
-.mvn/wrapper/maven-wrapper.properties
-pom.xml
+# 通用临时文件
+*.log
+*.swp
+*.swo
+
+# 确保核心配置文件被跟踪（修正误删）
+!pom.xml
+!mvnw
+!mvnw.cmd
+!src/main/resources/application.properties
+!src/main/resources/mapper/
+!src/main/resources/mock_data.sql
+!src/main/resources/wangchuang_data.sql
