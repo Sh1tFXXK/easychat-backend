@@ -8,7 +8,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import javax.servlet.FilterChain;
 import javax.servlet.ServletException;
@@ -20,15 +20,32 @@ import java.util.ArrayList;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
+    /**
+     * JWT工具类
+     */
     @Autowired
     private JwtUtil jwtUtil;
-    
+
+    /**
+     * 用户Mapper
+     */
     @Autowired
     private UserMapper userMapper;
-    
-    @Autowired
-    private RedisTemplate<String, Object> redisTemplate;
 
+    /**
+     * Redis模板
+     */
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
+
+    /**
+     * 过滤器处理逻辑
+     * @param request HTTP请求
+     * @param response HTTP响应
+     * @param filterChain 过滤器链
+     * @throws ServletException
+     * @throws IOException
+     */
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
@@ -36,8 +53,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // 1. 从请求头获取Token
         String token = extractTokenFromRequest(request);
 
-        if (token != null && validateToken(token)) {
-            // 2. 验证Token并解析出用户ID
+        if (token != null && validateJwtToken(token)) {
+            // 2. 验证Token并解析出用户ID（支持两种映射）
             String userId = getUserIdFromToken(token);
 
             if (userId != null) {
@@ -74,12 +91,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * @param token JWT token
      * @return token是否有效
      */
-    private boolean validateToken(String token) {
+    private boolean validateJwtToken(String token) {
         try {
             // 先检查JWT本身是否有效
             if (jwtUtil.validateToken(token)) {
-                // 再检查Redis中是否存在该token，保持与ChatSocketIOHandler的一致性
-                return Boolean.TRUE.equals(redisTemplate.hasKey("token:" + token));
+                // 统一：仅检查 userToken:<userId> -> <token>
+                String userId = jwtUtil.getUserIdFromToken(token);
+                String t = stringRedisTemplate.opsForValue().get("userToken:" + userId);
+                return token.equals(t);
             }
             return false;
         } catch (Exception e) {
@@ -94,9 +113,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      */
     private String getUserIdFromToken(String token) {
         try {
-            // 从Redis中获取与token关联的用户ID，保持与ChatSocketIOHandler的一致性
-            Object userId = redisTemplate.opsForValue().get("token:" + token);
-            return userId != null ? userId.toString() : null;
+            // 仅从JWT解析 userId
+            return jwtUtil.getUserIdFromToken(token);
         } catch (Exception e) {
             return null;
         }

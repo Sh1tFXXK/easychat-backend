@@ -8,6 +8,7 @@ import org.example.easychat.dto.authDto;
 import org.example.easychat.utils.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.TimeUnit;
@@ -22,7 +23,7 @@ public class AuthService implements AuthInterface{
     private JwtUtil jwt;
 
     @Autowired
-    private RedisTemplate<String, Object> redisTemplate;
+    private StringRedisTemplate stringRedisTemplate;
 
 
     @Override
@@ -55,11 +56,8 @@ public class AuthService implements AuthInterface{
         // 生成token
         String token = jwt.generateToken(user.getId());
         
-        // 登录成功后存储token
-        // 使用 key token:<token> -> <userId>
-        redisTemplate.opsForValue().set("token:" + token, user.getId(), 7, TimeUnit.DAYS);
-        // 可选维护 userToken:<userId> -> <token>
-        redisTemplate.opsForValue().set("userToken:" + user.getId(), token, 7, TimeUnit.DAYS);
+        // 登录成功后仅存储单一映射：userToken:<userId> -> <token>
+        stringRedisTemplate.opsForValue().set("userToken:" + user.getId(), token, 7, TimeUnit.DAYS);
         
         // 更新用户状态
         user.setStatus(1);
@@ -75,15 +73,10 @@ public class AuthService implements AuthInterface{
             throw new IllegalArgumentException("用户未登录");
         }
 
-        // 先取 userId
-        String userId = (String) redisTemplate.opsForValue().get("token:" + token);
-        
-        // 删除 token:<token> -> <userId>
-        redisTemplate.delete("token:" + token);
-        
-        // 如维护了 userToken，则也删除 userToken:<userId> -> <token>
+        // 根据 JWT 解析 userId，然后删除 userToken:<userId>
+        String userId = jwt.getUserIdFromToken(token);
         if (userId != null && !userId.isEmpty()) {
-            redisTemplate.delete("userToken:" + userId);
+            stringRedisTemplate.delete("userToken:" + userId);
         }
         
         //更新用戶离线状态
@@ -93,17 +86,5 @@ public class AuthService implements AuthInterface{
         //通过WebSocket通知好友用户离线
 
     }
-    
-    // 登录成功后生成并存储token
-    public String loginSuccess(User user) {
-        // 生成JWT token
-        String token = jwt.generateToken(user.getId());
 
-        // 将token存储到Redis中
-        redisTemplate.opsForValue().set("token:" + token, user.getId(), 7, TimeUnit.DAYS);
-        // 可选维护 userToken:<userId> -> <token>
-        redisTemplate.opsForValue().set("userToken:" + user.getId(), token, 7, TimeUnit.DAYS);
-
-        return token;
-    }
 }

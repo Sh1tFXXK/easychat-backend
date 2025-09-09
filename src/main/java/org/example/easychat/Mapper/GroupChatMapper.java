@@ -39,6 +39,9 @@ public interface GroupChatMapper extends BaseMapper<createGroupDto> {
 
     @Select("SELECT * FROM group_messages WHERE group_id = #{groupId}")
     List<GroupMessage> getGroupMessages(String groupId);
+    
+    @Select("SELECT user_id FROM group_members WHERE group_id = #{groupId}")
+    List<String> getGroupMemberIds(String groupId);
 
     @Insert("INSERT INTO group_messages (group_id, sender_id, content, message_type, sent_at) VALUES (#{groupId}, #{senderId}, #{content}, #{messageType}, #{sentAt})")
     void insertGroupMessage(GroupMessage message);

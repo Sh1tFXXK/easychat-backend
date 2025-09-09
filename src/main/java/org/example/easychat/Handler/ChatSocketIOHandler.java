@@ -18,10 +18,12 @@ import org.example.easychat.dto.friendVerifyDto;
 import org.example.easychat.utils.JwtUtil;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -42,47 +44,65 @@ public class ChatSocketIOHandler {
 
     @Autowired
     private JwtUtil jwtUtil;
-    
+
     @Autowired
-    private RedisTemplate<String, Object> redisTemplate;
+    private StringRedisTemplate stringRedisTemplate;
 
     // 用户会话映射
     private static final ConcurrentHashMap<String, SocketIOClient> sessions = new ConcurrentHashMap<>();
+
     // 在线用户列表 (userId -> status)
     private static final ConcurrentHashMap<String, Integer> onlineUsers = new ConcurrentHashMap<>();
 
+    /**
+     * 用户连接时处理
+     * @param client
+     */
     @OnConnect
     public void onConnect(SocketIOClient client) {
+
         log.info("Socket.IO连接已建立: {}", client.getSessionId());
-        
         // 从连接参数中获取token
-        String token = client.getHandshakeData().getSingleUrlParam("token");
-        
-        if (token != null && !token.isEmpty()) {
-            log.info("尝试验证token: {}", token);
-            if (validateToken(token)) {
-                String userId = getUserIdFromToken(token);
-                if (userId != null && !userId.isEmpty()) {
-                    // 认证成功，将用户添加到会话中
-                    client.set("userId", userId);
-                    log.info("用户认证成功: userId={}", userId);
-                } else {
-                    log.warn("从token中无法解析出有效的用户ID");
-                }
+        String raw = client.getHandshakeData().getSingleUrlParam("token");
+        log.info("Handshake data: {}", client.getHandshakeData());
+        log.info("Query params: {}", client.getHandshakeData().getUrlParams());
+        log.info("Full URL: {}", client.getHandshakeData().getUrl());
+
+        if (raw == null || raw.isEmpty()) {
+            log.warn("连接中未提供raw");
+            return;
+        }
+
+        String token;
+        token = URLDecoder.decode(raw, StandardCharsets.UTF_8);
+        if(token.startsWith("Bearer ")){
+            token = token.substring(7);
+        }
+        log.info("尝试验证token（已解码/去前缀）：{}",token);
+
+        if (validateSocketToken(token)) {
+            String userId = getUserIdFromToken(token);
+            if (userId != null && !userId.isEmpty()) {
+                client.set("userId", userId);
+                log.info("用户认证成功: userId={}", userId);
             } else {
-                log.warn("Token验证失败");
+                log.warn("从token中无法解析出有效的用户ID");
             }
         } else {
-            log.warn("连接中未提供token");
+            log.warn("Token验证失败");
         }
     }
 
+    /**
+     * 用户断开连接时处理
+     * @param client
+     */
     @OnDisconnect
     public void onDisconnect(SocketIOClient client) {
         log.info("Socket.IO连接已关闭: {}", client.getSessionId());
-        
+
         // 获取断开连接的用户ID
-        String userId = (String) client.get("userId");
+        String userId = client.get("userId");
         if (userId != null) {
             log.info("用户 {} 断开连接", userId);
             // 从在线用户列表中移除
@@ -91,25 +111,31 @@ public class ChatSocketIOHandler {
             // 广播更新后的在线用户列表
             broadcastOnlineUsers();
         }
-        
+
         removeSession(client);
     }
 
+    /**
+     * 用户上线时处理
+     * @param client
+     * @param userId
+     * @param status
+     */
     @OnEvent("online")
     public void onUserOnline(SocketIOClient client, String userId, Integer status) {
         try {
             // 验证用户ID是否与认证的用户匹配
-            String authenticatedUserId = (String) client.get("userId");
+            String authenticatedUserId = client.get("userId");
             if (authenticatedUserId == null || authenticatedUserId.isEmpty()) {
                 log.warn("用户未认证，拒绝上线请求");
                 return;
             }
-            
+
             if (!authenticatedUserId.equals(userId)) {
                 log.warn("用户认证失败: authenticatedUserId={}, requestedUserId={}", authenticatedUserId, userId);
                 return;
             }
-            
+
             log.info("用户上线: userId={}, status={}", userId, status);
 
             // 1. 将用户ID添加到在线用户列表中
@@ -119,7 +145,10 @@ public class ChatSocketIOHandler {
             // 2. 广播更新后的在线用户列表给所有连接的客户端
             broadcastOnlineUsers();
 
-            // 3. 向当前用户发送确认消息
+            // 3. 通知所有用户该用户已上线
+            socketIOServer.getBroadcastOperations().sendEvent("userOnline", userId);
+
+            // 4. 向当前用户发送确认消息
             client.sendEvent("onlineConfirmed", "success");
 
         } catch (Exception e) {
@@ -138,6 +167,9 @@ public class ChatSocketIOHandler {
 
             // 2. 广播更新后的在线用户列表
             broadcastOnlineUsers();
+
+            // 3. 通知所有用户该用户已下线
+            socketIOServer.getBroadcastOperations().sendEvent("userOffline", userId);
 
         } catch (Exception e) {
             log.error("处理用户下线时出错", e);
@@ -260,15 +292,15 @@ public class ChatSocketIOHandler {
         }
         //更新好友申请状态
         userMapper.updateFriendStatus(userId, friendId, 1);
-        
+
         //创建新的聊天会话ID
         String sessionId = jwtUtil.generateCode();
-        
+
         //创建双向好友关系
         // 为当前用户添加好友
         friendInfo.setSessionId(sessionId);
         userMapper.insertUserFriend(userId, friendInfo);
-        
+
         // 为请求方添加好友（需要获取请求方的昵称作为备注）
         User currentUser = userMapper.getUserById(userId);
         FriendInfo friendInfoReverse = new FriendInfo();
@@ -278,10 +310,10 @@ public class ChatSocketIOHandler {
         friendInfoReverse.setCreateTime(friendInfo.getCreateTime());
         friendInfoReverse.setSessionId(sessionId);
         userMapper.insertUserFriend(friendId, friendInfoReverse);
-        
+
         //构建返回给客户端的聊天会话对象
         ChatSession chatSession = onCreateChat(userId, friendId);
-        
+
         //检查请求方是否在线，如果在线则通知
         if (onlineUsers.containsKey(friendId)) {
             SocketIOClient friendClient = sessions.get(friendId);
@@ -289,7 +321,7 @@ public class ChatSocketIOHandler {
                 friendClient.sendEvent("newChat", chatSession);
             }
         }
-        
+
         //执行回调，将新创建的聊天会话对象返回给客户端
         ackRequest.sendAckData(chatSession);
     }
@@ -360,6 +392,7 @@ public class ChatSocketIOHandler {
     @OnEvent("removeFriend")
     public void onRemoveFriend(String userId, String friendId,AckRequest ackRequest) {
         if(userId == null || friendId == null){
+
             log.error("请求参数异常");
             return;
         }
@@ -384,27 +417,41 @@ public class ChatSocketIOHandler {
             log.error("广播在线用户时出错", e);
         }
     }
-    
+
+    /**
+     * 获取用户的Socket客户端
+     * @param userId 用户ID
+     * @return SocketIOClient 客户端实例
+     */
+    public SocketIOClient getUserClient(String userId) {
+        return sessions.get(userId);
+    }
+
     /**
      * 验证token是否有效
      * @param token JWT token
      * @return token是否有效
      */
-    private boolean validateToken(String token) {
+    private boolean validateSocketToken(String token) {
         try {
-            // 先检查JWT本身是否有效
-            if (jwtUtil.validateToken(token)) {
-                // 再检查Redis中是否存在该token，保持与JwtAuthenticationFilter的一致性
-                return Boolean.TRUE.equals(redisTemplate.hasKey("token:" + token));
+            if (!jwtUtil.validateToken(token)) {
+                log.warn("JWT验证失败或已过期，exp={}", jwtUtil.getExpirationDateFromToken(token));
+                return false;
             }
-            log.warn("JWT验证失败");
-            return false;
+            // 统一：仅校验 userToken:<userId> -> <token>
+            String userId = jwtUtil.getUserIdFromToken(token);
+            String cachedToken = stringRedisTemplate.opsForValue().get("userToken:" + userId);
+            boolean ok = token.equals(cachedToken);
+            if (!ok) {
+                log.warn("Redis 未命中 userToken 映射，userId={}", userId);
+            }
+            return ok;
         } catch (Exception e) {
             log.error("验证token时出错", e);
             return false;
         }
     }
-    
+
     /**
      * 从token中获取用户ID
      * @param token JWT token
@@ -412,11 +459,9 @@ public class ChatSocketIOHandler {
      */
     private String getUserIdFromToken(String token) {
         try {
-            // 从Redis中获取与token关联的用户ID，保持与JwtAuthenticationFilter的一致性
-            Object userId = redisTemplate.opsForValue().get("token:" + token);
-            String userIdStr = userId != null ? userId.toString() : null;
-            log.info("从token中解析出userId: {}", userIdStr);
-            return userIdStr;
+            String userId = jwtUtil.getUserIdFromToken( token);
+            log.info("从token中解析出userId: {}", userId);
+            return userId;
         } catch (Exception e) {
             log.error("从token解析用户ID时出错", e);
             return null;

@@ -1,8 +1,10 @@
 package org.example.easychat.service;
 
+import com.corundumstudio.socketio.SocketIOServer;
 import org.example.easychat.BO.ApiResponseBO;
 import org.example.easychat.Entity.GroupMember;
 import org.example.easychat.Entity.GroupMessage;
+import org.example.easychat.Handler.ChatSocketIOHandler;
 import org.example.easychat.Mapper.GroupChatMapper;
 import org.example.easychat.dto.createGroupDto;
 import org.example.easychat.utils.AliOSSUtil;
@@ -27,6 +29,9 @@ public class GroupChatService implements GroupChatInterface{
 
     @Autowired
     private AliOSSUtil aliOSSUtil;
+
+    @Autowired
+    private ChatSocketIOHandler chatSocketIOHandler;
 
     @Override
     @Transactional
@@ -113,6 +118,20 @@ public class GroupChatService implements GroupChatInterface{
             message.setSenderId(userId);
             message.setSentAt(new Timestamp(System.currentTimeMillis()));
             groupChatMapper.insertGroupMessage(message);
+            
+            // 通过WebSocket推送消息给所有群成员
+            // 获取群成员列表
+            List<String> groupMembers = groupChatMapper.getGroupMemberIds(groupId);
+            
+            // 推送消息给每个在线的群成员
+            for (String memberId : groupMembers) {
+                // 获取用户的Socket客户端
+                com.corundumstudio.socketio.SocketIOClient client = chatSocketIOHandler.getUserClient(memberId);
+                if (client != null && client.isChannelOpen()) {
+                    client.sendEvent("receive_group_message", message);
+                }
+            }
+            
             return ApiResponseBO.success(url);
 
         } catch (IOException e) {
@@ -139,6 +158,20 @@ public class GroupChatService implements GroupChatInterface{
             message.setSenderId(userId);
             message.setSentAt(new Timestamp(System.currentTimeMillis()));
             groupChatMapper.insertGroupMessage(message);
+            
+            // 通过WebSocket推送消息给所有群成员
+            // 获取群成员列表
+            List<String> groupMembers = groupChatMapper.getGroupMemberIds(groupId);
+            
+            // 推送消息给每个在线的群成员
+            for (String memberId : groupMembers) {
+                // 获取用户的Socket客户端
+                com.corundumstudio.socketio.SocketIOClient client = chatSocketIOHandler.getUserClient(memberId);
+                if (client != null && client.isChannelOpen()) {
+                    client.sendEvent("receive_group_message", message);
+                }
+            }
+            
             return ApiResponseBO.success(url);
 
         } catch (IOException e) {
@@ -165,6 +198,20 @@ public class GroupChatService implements GroupChatInterface{
             message.setSenderId(userId);
             message.setSentAt(new Timestamp(System.currentTimeMillis()));
             groupChatMapper.insertGroupMessage(message);
+            
+            // 通过WebSocket推送消息给所有群成员
+            // 获取群成员列表
+            List<String> groupMembers = groupChatMapper.getGroupMemberIds(groupId);
+            
+            // 推送消息给每个在线的群成员
+            for (String memberId : groupMembers) {
+                // 获取用户的Socket客户端
+                com.corundumstudio.socketio.SocketIOClient client = chatSocketIOHandler.getUserClient(memberId);
+                if (client != null && client.isChannelOpen()) {
+                    client.sendEvent("receive_group_message", message);
+                }
+            }
+            
             return ApiResponseBO.success("消息发送成功");
         } catch (Exception e) {
             throw new RuntimeException("消息发送失败: " + e.getMessage());
