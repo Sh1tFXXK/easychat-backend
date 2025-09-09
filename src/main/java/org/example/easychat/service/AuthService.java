@@ -64,6 +64,7 @@ public class AuthService implements AuthInterface{
         // 更新用户状态
         user.setStatus(1);
         userMapper.updateById(user);
+        //通知好友上线
         
         // 直接返回用户ID和token
         return new LoginBO(user.getId(), token);
