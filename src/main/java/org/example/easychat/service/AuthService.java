@@ -93,17 +93,4 @@ public class AuthService implements AuthInterface{
         //通过WebSocket通知好友用户离线
 
     }
-    
-    // 登录成功后生成并存储token
-    public String loginSuccess(User user) {
-        // 生成JWT token
-        String token = jwt.generateToken(user.getId());
-
-        // 将token存储到Redis中
-        redisTemplate.opsForValue().set("token:" + token, user.getId(), 7, TimeUnit.DAYS);
-        // 可选维护 userToken:<userId> -> <token>
-        redisTemplate.opsForValue().set("userToken:" + user.getId(), token, 7, TimeUnit.DAYS);
-
-        return token;
-    }
 }
