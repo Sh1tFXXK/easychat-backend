@@ -56,14 +56,13 @@ public class AuthService implements AuthInterface{
         String token = jwt.generateToken(user.getId());
         
         // 登录成功后存储token
-        // 使用 key token:<token> -> <userId>
-        redisTemplate.opsForValue().set("token:" + token, user.getId(), 7, TimeUnit.DAYS);
-        // 可选维护 userToken:<userId> -> <token>
+        // userToken:<userId> -> <token>
         redisTemplate.opsForValue().set("userToken:" + user.getId(), token, 7, TimeUnit.DAYS);
         
         // 更新用户状态
         user.setStatus(1);
         userMapper.updateById(user);
+        
         //通知好友上线
         
         // 直接返回用户ID和token
@@ -79,10 +78,7 @@ public class AuthService implements AuthInterface{
         // 先取 userId
         String userId = (String) redisTemplate.opsForValue().get("token:" + token);
         
-        // 删除 token:<token> -> <userId>
-        redisTemplate.delete("token:" + token);
-        
-        // 如维护了 userToken，则也删除 userToken:<userId> -> <token>
+        // 删除 token
         if (userId != null && !userId.isEmpty()) {
             redisTemplate.delete("userToken:" + userId);
         }
