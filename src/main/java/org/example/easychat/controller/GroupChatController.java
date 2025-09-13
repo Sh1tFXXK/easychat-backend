@@ -48,6 +48,14 @@ public class GroupChatController {
         return ResponseBO.success("群聊创建成功", newGroup);
     }
     /**
+     * 解散群聊
+     */
+    @DeleteMapping("groups/{groupId}")
+    public ResponseBO<String> deleteGroup(@PathVariable String groupId) {
+        groupChat.deleteGroup(groupId);
+        return ResponseBO.success("群聊解散成功");
+    }
+    /**
      * 获取用户加入的群聊列表
      */
     @GetMapping("users/{userId}/groups")
@@ -93,11 +101,6 @@ public class GroupChatController {
     }
 
     /**
-     * 解散群聊
-     */
-    //todo
-
-    /**
      * 获取群聊历史消息 (分页)
      */
     @GetMapping("groups/{groupId}/messages")
@@ -141,24 +144,6 @@ public class GroupChatController {
         String currentUserId = currentUser.getId();
         return groupChat.sendFile(file, groupId, currentUserId);
     }
-
-    /**
-     * 发送群聊文本消息
-     */
-    @PostMapping("messages/text")
-    public ApiResponseBO sendText(@RequestBody Map<String, String> payload,
-                                  Authentication authentication){
-        User currentUser = (User) authentication.getPrincipal();
-        String currentUserId = currentUser.getId();
-
-        String content = payload.get("content");
-        String groupId = payload.get("groupId");
-
-        return groupChat.sendText(content, groupId, currentUserId);
-    }
-
-
-
 
 //    @DeleteMapping("groups/{groupId}")
 //    public ResponseBO<String> deleteGroup(@PathVariable String groupId) {

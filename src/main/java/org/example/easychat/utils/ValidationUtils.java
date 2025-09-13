@@ -5,18 +5,10 @@ import java.util.regex.Pattern;
 public class ValidationUtils {
 
     /**
-     * 校验用户名：6-11位，字母开头，只能包含字母、数字、下划线，不能以下划线结尾
+     * 校验昵称和用户名：1-11位，可以是任意字符
      */
-    public static boolean isValidUsername(String username) {
-        return Pattern.matches("^[A-Za-z][A-Za-z0-9_]{5,10}$", username) &&
-               !username.endsWith("_");
-    }
-
-    /**
-     * 校验昵称：1-11位，可以是任意字符
-     */
-    public static boolean isValidNickName(String nickName) {
-        return nickName != null && nickName.length() >= 1 && nickName.length() <= 11;
+    public static boolean isValidName(String nickName) {
+        return nickName == null || nickName.isEmpty() || nickName.length() > 11;
     }
 
     /**

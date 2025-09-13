@@ -45,4 +45,13 @@ public interface GroupChatMapper extends BaseMapper<createGroupDto> {
 
     @Insert("INSERT INTO group_messages (group_id, sender_id, content, message_type, sent_at) VALUES (#{groupId}, #{senderId}, #{content}, #{messageType}, #{sentAt})")
     void insertGroupMessage(GroupMessage message);
+
+    @Delete("DELETE FROM `groups` WHERE group_id = #{groupId}")
+    void deleteGroup(String groupId);
+
+    @Delete("DELETE FROM group_members WHERE group_id = #{groupId}")
+    void deleteAllGroupMembers(String groupId);
+
+    @Delete("DELETE FROM group_messages WHERE group_id = #{groupId}")
+    void deleteAllGroupMessages(String groupId);
 }

@@ -179,43 +179,16 @@ public class GroupChatService implements GroupChatInterface{
         }
     }
     @Override
-    public ApiResponseBO sendText(String content, String groupId, String userId) {
-        // 验证内容
-        if (content == null || content.trim().isEmpty()) {
-            throw new IllegalArgumentException("消息内容不能为空");
+    public void deleteGroup(String groupId) {
+        // 验证群组ID
+        if (groupId == null || groupId.trim().isEmpty()) {
+            throw new IllegalArgumentException("群组ID不能为空");
         }
 
-        // 限制消息长度（可选）
-        if (content.length() > 1000) {
-            throw new IllegalArgumentException("消息内容不能超过1000个字符");
-        }
-
-        try {
-            GroupMessage message = new GroupMessage();
-            message.setGroupId(groupId);
-            message.setContent(content);
-            message.setMessageType("text");
-            message.setSenderId(userId);
-            message.setSentAt(new Timestamp(System.currentTimeMillis()));
-            groupChatMapper.insertGroupMessage(message);
-            
-            // 通过WebSocket推送消息给所有群成员
-            // 获取群成员列表
-            List<String> groupMembers = groupChatMapper.getGroupMemberIds(groupId);
-            
-            // 推送消息给每个在线的群成员
-            for (String memberId : groupMembers) {
-                // 获取用户的Socket客户端
-                com.corundumstudio.socketio.SocketIOClient client = chatSocketIOHandler.getUserClient(memberId);
-                if (client != null && client.isChannelOpen()) {
-                    client.sendEvent("receive_group_message", message);
-                }
-            }
-            
-            return ApiResponseBO.success("消息发送成功");
-        } catch (Exception e) {
-            throw new RuntimeException("消息发送失败: " + e.getMessage());
-        }
+        // 删除群组
+        groupChatMapper.deleteGroup(groupId);
+        groupChatMapper.deleteAllGroupMembers(groupId);
+        groupChatMapper.deleteAllGroupMessages(groupId);
     }
 
 }

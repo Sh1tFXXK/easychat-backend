@@ -60,4 +60,6 @@ public interface UserMapper extends BaseMapper<User> {
 
     @Delete("delete from user_friends where user_id = #{userId} and friend_user_id = #{friendId}")
     void removeFriend(String userId, String friendId);
+
+    boolean isUserInGroup(String groupId, String senderId);
 }

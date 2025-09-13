@@ -191,5 +191,12 @@
         FROM users u
         WHERE u.id = #{userId}
     </select>
+    <select id="isUserInGroup" resultType="java.lang.Boolean">
+            SELECT EXISTS(
+                SELECT 1
+                FROM group_members
+                WHERE group_id = #{groupId} AND user_id = #{senderId}
+            )
+    </select>
 
 </mapper>

@@ -105,12 +105,12 @@ public class UserService implements UserInterface{
     @Override
     public void register(RegisterDto registerDto) {
         // 校验用户名
-        if (registerDto.getUsername() == null || !ValidationUtils.isValidUsername(registerDto.getUsername())) {
-            throw new IllegalArgumentException("用户名不符合规范：6-11位，字母开头，只能包含字母、数字、下划线，不能以下划线结尾");
+        if (registerDto.getUsername() == null || ValidationUtils.isValidName(registerDto.getUsername())) {
+            throw new IllegalArgumentException("用户名不符合规范：1-11位");
         }
 
         // 校验昵称
-        if (registerDto.getNickName() == null || !ValidationUtils.isValidNickName(registerDto.getNickName())) {
+        if (registerDto.getNickName() == null || ValidationUtils.isValidName(registerDto.getNickName())) {
             throw new IllegalArgumentException("昵称不符合规范：1-11位");
         }
 

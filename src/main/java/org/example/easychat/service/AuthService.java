@@ -67,6 +67,7 @@ public class AuthService implements AuthInterface{
         return new LoginBO(user.getId(), token);
     }
 
+
     @Override
     public void logout(String token) {
         if(token == null || token.isEmpty()) {
@@ -83,8 +84,7 @@ public class AuthService implements AuthInterface{
         if (userId != null && !userId.isEmpty()) {
             userMapper.updateUserStatus(0, userId);
         }
-        //通过WebSocket通知好友用户离线
-
+        
     }
 
 }

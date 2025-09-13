@@ -20,6 +20,9 @@ public class SecurityConfig {
   
   private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
+  /*
+   * 配置跨域请求
+   */
   public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
     this.jwtAuthenticationFilter = jwtAuthenticationFilter;
   }

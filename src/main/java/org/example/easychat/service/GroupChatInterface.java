@@ -25,5 +25,5 @@ public interface GroupChatInterface {
 
     ApiResponseBO sendFile(MultipartFile file, String groupId, String userId);
 
-    ApiResponseBO sendText(String content, String groupId, String currentUserId);
+    void deleteGroup(String groupId);
 }

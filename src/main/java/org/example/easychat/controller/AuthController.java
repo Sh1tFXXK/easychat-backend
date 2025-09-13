@@ -21,9 +21,6 @@ public class AuthController {
     @Autowired
     private AuthService authService;
 
-    @Autowired
-    private RedisTemplate<String, String> redisTemplate;
-
 
     /**
      * 登录
@@ -39,7 +36,6 @@ public class AuthController {
 
     /**
      * 登出
-     *
      * @return
      * @throws Exception
      */
@@ -53,7 +49,7 @@ public class AuthController {
             }
 
             authService.logout(token);
-            return ResponseBO.success("登出成功", null);
+            return ResponseBO.success("登出成功");
         } catch (IllegalArgumentException e) {
             return ResponseBO.error(e.getMessage());
         }
