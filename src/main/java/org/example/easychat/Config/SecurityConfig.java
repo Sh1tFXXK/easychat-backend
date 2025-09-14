@@ -44,7 +44,8 @@ public class SecurityConfig {
   @Bean
   public CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration config = new CorsConfiguration();
-    config.setAllowedOrigins(Arrays.asList("http://localhost:8088", "http://localhost:8089"));
+    // 允许所有来源的跨域请求
+    config.setAllowedOriginPatterns(Arrays.asList("*"));
     config.setAllowedMethods(Arrays.asList("GET","POST","PUT","DELETE","OPTIONS"));
     config.setAllowedHeaders(Arrays.asList("*"));
     config.setAllowCredentials(true);

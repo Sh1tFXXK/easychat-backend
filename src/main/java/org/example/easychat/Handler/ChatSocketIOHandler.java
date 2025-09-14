@@ -296,9 +296,14 @@ public class ChatSocketIOHandler {
                 return;
             }
             
+            // 获取发送者昵称
+            User sender = userMapper.getUserById(message.getSenderId());
+            String senderUsername = sender != null ? sender.getNickName() : "未知用户";
+            
             // 设置消息发送时间和ID
             message.setSentAt(new java.sql.Timestamp(System.currentTimeMillis()));
             message.setMessageId(jwtUtil.generateCode());
+            message.setSenderUsername(senderUsername);
             
             log.info("准备保存群聊消息: {}", message);
             

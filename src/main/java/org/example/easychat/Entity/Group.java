@@ -13,5 +13,6 @@ public class Group {
     private String announcement;
     private String avatar;
     private String createdAt;
+    private Integer memberCount; // 群成员数量
 
 }

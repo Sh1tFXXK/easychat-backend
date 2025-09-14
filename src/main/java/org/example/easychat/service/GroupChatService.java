@@ -4,8 +4,10 @@ import com.corundumstudio.socketio.SocketIOServer;
 import org.example.easychat.BO.ApiResponseBO;
 import org.example.easychat.Entity.GroupMember;
 import org.example.easychat.Entity.GroupMessage;
+import org.example.easychat.Entity.User;
 import org.example.easychat.Handler.ChatSocketIOHandler;
 import org.example.easychat.Mapper.GroupChatMapper;
+import org.example.easychat.Mapper.UserMapper;
 import org.example.easychat.dto.createGroupDto;
 import org.example.easychat.utils.AliOSSUtil;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +28,9 @@ public class GroupChatService implements GroupChatInterface{
 
     @Autowired
     private GroupChatMapper groupChatMapper;
+
+    @Autowired
+    private UserMapper userMapper;
 
     @Autowired
     private AliOSSUtil aliOSSUtil;
@@ -66,12 +71,23 @@ public class GroupChatService implements GroupChatInterface{
 
     @Override
     public List<Group> getUserGroups(String userId) {
-       return groupChatMapper.selectGroupsByUserId(userId);
+        List<Group> groups = groupChatMapper.selectGroupsByUserId(userId);
+        // 为每个群聊添加成员数量信息
+        for (Group group : groups) {
+            Integer memberCount = groupChatMapper.getGroupMemberCount(group.getGroupId());
+            group.setMemberCount(memberCount != null ? memberCount : 0);
+        }
+        return groups;
     }
 
     @Override
     public Group getGroupDetail(String groupId) {
-        return groupChatMapper.selectGroupById(groupId);
+        Group group = groupChatMapper.selectGroupById(groupId);
+        if (group != null) {
+            Integer memberCount = groupChatMapper.getGroupMemberCount(groupId);
+            group.setMemberCount(memberCount != null ? memberCount : 0);
+        }
+        return group;
     }
     @Override
     public void inviteMembers(String groupId, List<String> userIds) {
@@ -111,11 +127,17 @@ public class GroupChatService implements GroupChatInterface{
         // 保存图片
         try {
             String url = aliOSSUtil.uploadImage(file);
+            
+            // 获取发送者昵称
+            User sender = userMapper.getUserById(userId);
+            String senderUsername = sender != null ? sender.getNickName() : "未知用户";
+            
             GroupMessage message = new GroupMessage();
             message.setGroupId(groupId);
             message.setContent(url);
             message.setMessageType("image");
             message.setSenderId(userId);
+            message.setSenderUsername(senderUsername);
             message.setSentAt(new Timestamp(System.currentTimeMillis()));
             groupChatMapper.insertGroupMessage(message);
             
@@ -148,14 +170,20 @@ public class GroupChatService implements GroupChatInterface{
         if (size > 30 * 1024 * 1024) {
             throw new IllegalArgumentException("文件大小不能超过30MB");
         }
-        // 保存图片
+        // 保存文件
         try {
             String url = aliOSSUtil.uploadFile(file);
+            
+            // 获取发送者昵称
+            User sender = userMapper.getUserById(userId);
+            String senderUsername = sender != null ? sender.getNickName() : "未知用户";
+            
             GroupMessage message = new GroupMessage();
             message.setGroupId(groupId);
             message.setContent(url);
             message.setMessageType("file");
             message.setSenderId(userId);
+            message.setSenderUsername(senderUsername);
             message.setSentAt(new Timestamp(System.currentTimeMillis()));
             groupChatMapper.insertGroupMessage(message);
             

@@ -13,4 +13,5 @@ public class GroupMessage {
     private String messageType;
     private Timestamp sentAt;
     private String messageId;
+    private String senderUsername;
 }

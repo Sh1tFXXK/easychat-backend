@@ -37,13 +37,16 @@ public interface GroupChatMapper extends BaseMapper<createGroupDto> {
     @Select("SELECT * FROM group_members WHERE group_id = #{groupId} AND user_id = #{currentUserId}")
     boolean isGroupMember(String groupId, String currentUserId);
 
-    @Select("SELECT * FROM group_messages WHERE group_id = #{groupId}")
+    @Select("SELECT * FROM group_messages WHERE group_id = #{groupId} ORDER BY sent_at ASC")
     List<GroupMessage> getGroupMessages(String groupId);
     
     @Select("SELECT user_id FROM group_members WHERE group_id = #{groupId}")
     List<String> getGroupMemberIds(String groupId);
 
-    @Insert("INSERT INTO group_messages (group_id, sender_id, content, message_type, sent_at) VALUES (#{groupId}, #{senderId}, #{content}, #{messageType}, #{sentAt})")
+    @Select("SELECT COUNT(*) FROM group_members WHERE group_id = #{groupId}")
+    Integer getGroupMemberCount(String groupId);
+
+    @Insert("INSERT INTO group_messages (group_id, sender_id, content, message_type, sent_at, sender_username) VALUES (#{groupId}, #{senderId}, #{content}, #{messageType}, #{sentAt}, #{senderUsername})")
     void insertGroupMessage(GroupMessage message);
 
     @Delete("DELETE FROM `groups` WHERE group_id = #{groupId}")
