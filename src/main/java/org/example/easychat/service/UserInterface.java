@@ -1,5 +1,6 @@
 package org.example.easychat.service;
 
+import org.example.easychat.Entity.PageResult;
 import org.example.easychat.Entity.User;
 import org.example.easychat.Entity.UserSearchResult;
 import org.example.easychat.dto.RegisterDto;
@@ -54,4 +55,6 @@ public interface UserInterface {
     boolean validatePassword(String userId, String password);
 
     Map<String, String> addTag(String userId, String tag);
+
+
 }

@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="org.example.easychat.Mapper.SpecialAttentionMapper">
+    
+    <!-- 批量插入特别关心记录 -->
+    <insert id="batchInsert">
+        INSERT INTO special_attention (user_id, target_user_id, online_notification, offline_notification, 
+                                      message_notification, status_change_notification, create_time, update_time)
+        VALUES
+        <foreach collection="attentions" item="attention" separator=",">
+            (#{attention.userId}, #{attention.targetUserId}, #{attention.onlineNotification}, 
+             #{attention.offlineNotification}, #{attention.messageNotification}, 
+             #{attention.statusChangeNotification}, #{attention.createTime}, #{attention.updateTime})
+        </foreach>
+    </insert>
+
+    <!-- 批量删除特别关心记录 -->
+    <delete id="batchDelete">
+        DELETE FROM special_attention 
+        WHERE user_id = #{userId} 
+        AND target_user_id IN
+        <foreach collection="targetUserIds" item="targetUserId" open="(" separator="," close=")">
+            #{targetUserId}
+        </foreach>
+    </delete>
+
+    <!-- 获取用户的特别关心列表（包含用户信息和状态） -->
+    <select id="getAttentionListWithUserInfo" resultType="org.example.easychat.VO.SpecialAttentionVO">
+        SELECT 
+            sa.id,
+            sa.user_id as userId,
+            sa.target_user_id as targetUserId,
+            sa.create_time as createTime,
+            sa.update_time as updateTime,
+            u.avatar as 'targetUserInfo.avatar',
+            u.nickname as 'targetUserInfo.nickName',
+            u.introduction as 'targetUserInfo.remark',
+            COALESCE(us.status, 'offline') as 'targetUserInfo.status',
+            DATE_FORMAT(us.last_active_time, '%Y-%m-%d %H:%i:%s') as 'targetUserInfo.lastActiveTime',
+            sa.online_notification as 'notificationSettings.onlineNotification',
+            sa.offline_notification as 'notificationSettings.offlineNotification',
+            sa.message_notification as 'notificationSettings.messageNotification',
+            sa.status_change_notification as 'notificationSettings.statusChangeNotification'
+        FROM special_attention sa
+        LEFT JOIN users u ON sa.target_user_id = u.id
+        LEFT JOIN user_status us ON sa.target_user_id = us.user_id
+        WHERE sa.user_id = #{userId}
+        <if test="status != null and status != ''">
+            AND COALESCE(us.status, 'offline') = #{status}
+        </if>
+        ORDER BY sa.create_time DESC
+        <if test="limit != null and offset != null">
+            LIMIT #{offset}, #{limit}
+        </if>
+    </select>
+    
+    <!-- 获取关心指定用户的所有用户ID列表 -->
+    <select id="getUsersAttentionTo" resultType="java.lang.String">
+        SELECT user_id 
+        FROM special_attention 
+        WHERE target_user_id = #{targetUserId}
+    </select>
+
+    <!-- 检查特别关心关系是否存在 -->
+    <select id="existsAttention" resultType="java.lang.Boolean">
+        SELECT COUNT(1) > 0
+        FROM special_attention 
+        WHERE user_id = #{userId} 
+        AND target_user_id = #{targetUserId}
+    </select>
+
+    <!-- 获取用户特别关心统计信息 -->
+    <select id="getAttentionStatistics" resultType="org.example.easychat.VO.AttentionStatistics">
+        SELECT 
+            #{userId} as userId,
+            COUNT(sa.id) as totalAttentions,
+            SUM(CASE WHEN COALESCE(us.status, 'offline') = 'online' THEN 1 ELSE 0 END) as onlineAttentions,
+            SUM(CASE WHEN COALESCE(us.status, 'offline') = 'offline' THEN 1 ELSE 0 END) as offlineAttentions,
+            SUM(CASE WHEN DATE(sa.create_time) = CURDATE() THEN 1 ELSE 0 END) as todayNewAttentions
+        FROM special_attention sa
+        LEFT JOIN user_status us ON sa.target_user_id = us.user_id
+        WHERE sa.user_id = #{userId}
+    </select>
+    
+    <!-- 获取互相关注的用户列表 -->
+    <select id="getMutualAttentions" resultType="org.example.easychat.VO.SpecialAttentionVO">
+        SELECT 
+            sa1.id,
+            sa1.user_id as userId,
+            sa1.target_user_id as targetUserId,
+            sa1.create_time as createTime,
+            sa1.update_time as updateTime,
+            u.avatar as 'targetUserInfo.avatar',
+            u.nickname as 'targetUserInfo.nickName',
+            u.introduction as 'targetUserInfo.remark',
+            COALESCE(us.status, 'offline') as 'targetUserInfo.status',
+            DATE_FORMAT(us.last_active_time, '%Y-%m-%d %H:%i:%s') as 'targetUserInfo.lastActiveTime',
+            sa1.online_notification as 'notificationSettings.onlineNotification',
+            sa1.offline_notification as 'notificationSettings.offlineNotification',
+            sa1.message_notification as 'notificationSettings.messageNotification',
+            sa1.status_change_notification as 'notificationSettings.statusChangeNotification'
+        FROM special_attention sa1
+        INNER JOIN special_attention sa2 ON sa1.user_id = sa2.target_user_id AND sa1.target_user_id = sa2.user_id
+        LEFT JOIN users u ON sa1.target_user_id = u.id
+        LEFT JOIN user_status us ON sa1.target_user_id = us.user_id
+        WHERE sa1.user_id = #{userId}
+        ORDER BY sa1.create_time DESC
+        <if test="limit != null and offset != null">
+            LIMIT #{offset}, #{limit}
+        </if>
+    </select>
+    
+    <!-- 根据用户状态统计关注数量 -->
+    <select id="getAttentionCountByStatus" resultType="java.util.Map">
+        SELECT 
+            COALESCE(us.status, 'offline') as status,
+            COUNT(sa.id) as count
+        FROM special_attention sa
+        LEFT JOIN user_status us ON sa.target_user_id = us.user_id
+        WHERE sa.user_id = #{userId}
+        GROUP BY COALESCE(us.status, 'offline')
+    </select>
+    
+    <!-- 获取最近活跃的关注用户 -->
+    <select id="getRecentActiveAttentions" resultType="org.example.easychat.VO.SpecialAttentionVO">
+        SELECT 
+            sa.id,
+            sa.user_id as userId,
+            sa.target_user_id as targetUserId,
+            sa.create_time as createTime,
+            sa.update_time as updateTime,
+            u.avatar as 'targetUserInfo.avatar',
+            u.nickname as 'targetUserInfo.nickName',
+            u.introduction as 'targetUserInfo.remark',
+            COALESCE(us.status, 'offline') as 'targetUserInfo.status',
+            DATE_FORMAT(us.last_active_time, '%Y-%m-%d %H:%i:%s') as 'targetUserInfo.lastActiveTime',
+            sa.online_notification as 'notificationSettings.onlineNotification',
+            sa.offline_notification as 'notificationSettings.offlineNotification',
+            sa.message_notification as 'notificationSettings.messageNotification',
+            sa.status_change_notification as 'notificationSettings.statusChangeNotification'
+        FROM special_attention sa
+        LEFT JOIN users u ON sa.target_user_id = u.id
+        LEFT JOIN user_status us ON sa.target_user_id = us.user_id
+        WHERE sa.user_id = #{userId}
+        AND us.last_active_time >= DATE_SUB(NOW(), INTERVAL #{hours} HOUR)
+        ORDER BY us.last_active_time DESC
+        <if test="limit != null">
+            LIMIT #{limit}
+        </if>
+    </select>
+    
+    <!-- 搜索关注用户 -->
+    <select id="searchAttentions" resultType="org.example.easychat.VO.SpecialAttentionVO">
+        SELECT 
+            sa.id,
+            sa.user_id as userId,
+            sa.target_user_id as targetUserId,
+            sa.create_time as createTime,
+            sa.update_time as updateTime,
+            u.avatar as 'targetUserInfo.avatar',
+            u.nickname as 'targetUserInfo.nickName',
+            u.introduction as 'targetUserInfo.remark',
+            COALESCE(us.status, 'offline') as 'targetUserInfo.status',
+            DATE_FORMAT(us.last_active_time, '%Y-%m-%d %H:%i:%s') as 'targetUserInfo.lastActiveTime',
+            sa.online_notification as 'notificationSettings.onlineNotification',
+            sa.offline_notification as 'notificationSettings.offlineNotification',
+            sa.message_notification as 'notificationSettings.messageNotification',
+            sa.status_change_notification as 'notificationSettings.statusChangeNotification'
+        FROM special_attention sa
+        LEFT JOIN users u ON sa.target_user_id = u.id
+        LEFT JOIN user_status us ON sa.target_user_id = us.user_id
+        WHERE sa.user_id = #{userId}
+        AND (u.nickname LIKE CONCAT('%', #{keyword}, '%') 
+             OR u.introduction LIKE CONCAT('%', #{keyword}, '%')
+             OR u.id LIKE CONCAT('%', #{keyword}, '%'))
+        ORDER BY sa.create_time DESC
+        <if test="limit != null and offset != null">
+            LIMIT #{offset}, #{limit}
+        </if>
+    </select>
+    
+    <!-- 获取关注用户的消息统计 -->
+    <select id="getAttentionMessageStats" resultType="java.util.Map">
+        SELECT 
+            sa.target_user_id as userId,
+            u.nickname as nickName,
+            u.avatar as avatar,
+            COALESCE(us.status, 'offline') as status,
+            COUNT(DISTINCT m.id) as messageCount,
+            MAX(m.create_time) as lastMessageTime
+        FROM special_attention sa
+        LEFT JOIN users u ON sa.target_user_id = u.id
+        LEFT JOIN user_status us ON sa.target_user_id = us.user_id
+        LEFT JOIN messages m ON (m.sender_id = sa.target_user_id AND m.receiver_id = sa.user_id)
+                             OR (m.sender_id = sa.user_id AND m.receiver_id = sa.target_user_id)
+        WHERE sa.user_id = #{userId}
+        AND m.create_time >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+        GROUP BY sa.target_user_id, u.nickname, u.avatar, us.status
+        ORDER BY lastMessageTime DESC
+    </select>
+</mapper>

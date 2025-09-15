@@ -1,0 +1,149 @@
+# 性能优化配置文件
+# 包含缓存、线程池、数据库连接池等性能相关配置
+
+# Redis缓存配置
+spring:
+  redis:
+    # 连接池配置
+    lettuce:
+      pool:
+        max-active: 20      # 连接池最大连接数
+        max-idle: 10        # 连接池最大空闲连接数
+        min-idle: 2         # 连接池最小空闲连接数
+        max-wait: 5000ms    # 连接池最大阻塞等待时间
+    timeout: 3000ms         # 连接超时时间
+    
+  # 数据库连接池配置
+  datasource:
+    hikari:
+      maximum-pool-size: 20           # 最大连接数
+      minimum-idle: 5                 # 最小空闲连接数
+      connection-timeout: 30000       # 连接超时时间(毫秒)
+      idle-timeout: 600000           # 空闲连接超时时间(毫秒)
+      max-lifetime: 1800000          # 连接最大生命周期(毫秒)
+      leak-detection-threshold: 60000 # 连接泄漏检测阈值(毫秒)
+      
+  # 缓存配置
+  cache:
+    type: redis
+    redis:
+      time-to-live: 3600000  # 默认缓存过期时间(毫秒)
+      cache-null-values: false # 不缓存null值
+
+# MyBatis-Plus配置
+mybatis-plus:
+  configuration:
+    # 开启二级缓存
+    cache-enabled: true
+    # 开启延迟加载
+    lazy-loading-enabled: true
+    # 设置查询超时时间
+    default-statement-timeout: 30
+  global-config:
+    db-config:
+      # 逻辑删除配置
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# 性能监控配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# 自定义性能配置
+performance:
+  # 缓存配置
+  cache:
+    # 用户状态缓存过期时间(秒)
+    user-status-ttl: 86400
+    # 特别关心列表缓存过期时间(秒)
+    attention-list-ttl: 1800
+    # 特别关心数量缓存过期时间(秒)
+    attention-count-ttl: 3600
+    # 特别关心设置缓存过期时间(秒)
+    attention-settings-ttl: 21600
+    
+  # 限流配置
+  rate-limit:
+    # 是否启用限流
+    enabled: true
+    # 默认限流窗口时间(秒)
+    default-window: 60
+    # 默认限流次数
+    default-limit: 100
+    
+  # 批量操作配置
+  batch:
+    # 最大批量大小
+    max-batch-size: 500
+    # 批量操作超时时间(秒)
+    timeout: 30
+    
+  # 异步处理配置
+  async:
+    # 通知处理线程池配置
+    notification:
+      core-pool-size: 5
+      max-pool-size: 20
+      queue-capacity: 200
+      keep-alive-seconds: 60
+    # 缓存处理线程池配置
+    cache:
+      core-pool-size: 3
+      max-pool-size: 10
+      queue-capacity: 100
+      keep-alive-seconds: 60
+    # 状态更新线程池配置
+    status-update:
+      core-pool-size: 2
+      max-pool-size: 8
+      queue-capacity: 50
+      keep-alive-seconds: 60
+      
+  # 数据库查询优化配置
+  query:
+    # 最大页面大小
+    max-page-size: 100
+    # 最大页码
+    max-page: 1000
+    # 查询超时时间(毫秒)
+    timeout: 5000
+    # 最大IN条件数量
+    max-in-size: 1000
+    
+  # 监控配置
+  monitoring:
+    # 是否启用性能监控
+    enabled: true
+    # 慢查询阈值(毫秒)
+    slow-query-threshold: 200
+    # 性能数据保留时间(小时)
+    metrics-retention-hours: 24
+
+# 日志配置
+logging:
+  level:
+    # 特别关心相关包的日志级别
+    org.example.easychat.service: INFO
+    org.example.easychat.controller: INFO
+    # SQL日志级别
+    org.example.easychat.Mapper: DEBUG
+    # 缓存日志级别
+    org.springframework.cache: DEBUG
+    # 性能监控日志级别
+    org.example.easychat.service.PerformanceMonitorService: INFO
+  pattern:
+    # 控制台日志格式
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId}] %logger{36} - %msg%n"
+    # 文件日志格式
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId}] %logger{36} - %msg%n"

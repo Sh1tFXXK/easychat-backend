@@ -1,5 +1,8 @@
 package org.example.easychat.utils;
 
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 public class ValidationUtils {
@@ -37,5 +40,22 @@ public class ValidationUtils {
      */
     public static boolean isValidVerifyCode(String code) {
         return Pattern.matches("^\\d{6}$", code);
+    }
+    /**
+     * 校验音频文件：mp3、wav、m4a、webm格式
+     */
+    public static boolean isValidAudioFile(String fileName) {
+        if (fileName == null || fileName.isEmpty()) {
+            return false;
+        }
+
+        // 获取文件后缀（不区分大小写）
+        String fileExtension = fileName.substring(fileName.lastIndexOf(".") + 1).toLowerCase();
+
+        // 校验是否为允许的音频格式
+        return "mp3".equals(fileExtension) ||
+                "wav".equals(fileExtension) ||
+                "m4a".equals(fileExtension) ||
+                "webm".equals(fileExtension);
     }
 }

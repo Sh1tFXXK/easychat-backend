@@ -2,6 +2,7 @@ package org.example.easychat.controller;
 
 import org.example.easychat.BO.ApiResponseBO;
 import org.example.easychat.BO.ResponseBO;
+import org.example.easychat.Entity.PageResult;
 import org.example.easychat.Entity.User;
 import org.example.easychat.Entity.UserSearchResult;
 import org.example.easychat.Mapper.UserMapper;

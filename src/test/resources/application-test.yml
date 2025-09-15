@@ -1,0 +1,34 @@
+# Test configuration to avoid database and external dependencies
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: 
+  
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+  
+  redis:
+    host: localhost
+    port: 6379
+    database: 1
+    timeout: 3000ms
+    
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+
+# Disable unnecessary features for testing
+management:
+  endpoints:
+    enabled-by-default: false
+
+logging:
+  level:
+    org.example.easychat: DEBUG
+    org.springframework: WARN

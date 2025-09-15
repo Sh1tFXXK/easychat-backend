@@ -1,6 +1,7 @@
 package org.example.easychat.controller;
 
 import org.example.easychat.BO.ApiResponseBO;
+import org.example.easychat.Entity.ChatHistory;
 import org.example.easychat.Entity.ChatSession;
 import org.example.easychat.BO.ResponseBO;
 import org.example.easychat.Entity.PageResult;
@@ -38,11 +39,11 @@ public class ChatController {
      * 获取聊天历史
      */
     @GetMapping("chats/chatHistory")
-    public ResponseBO<PageResult> getChatHistory( @RequestParam("id")    String userId,
-                                                  @RequestParam("session") String sessionId,
-                                                  @RequestParam("page") int current,
-                                                  @RequestParam("size") int pageSize){
-        PageResult pageResult = chatService.getChatPage(userId,sessionId,current, pageSize);
+    public ResponseBO<PageResult<ChatHistory>> getChatHistory(@RequestParam("id")    String userId,
+                                                              @RequestParam("session") String sessionId,
+                                                              @RequestParam("page") int current,
+                                                              @RequestParam("size") int pageSize){
+        PageResult<ChatHistory> pageResult = chatService.getChatPage(userId,sessionId,current, pageSize);
         return ResponseBO.success(pageResult);
     }
 
@@ -68,7 +69,15 @@ public class ChatController {
         return chatService.saveFileMsg(file, senderId, receiverId, sessionId);
     }
 
-
-
+    /**
+     * 上传语音文件
+     */
+    @PostMapping("chats/uploadVoice")
+    public ApiResponseBO uploadVoice(@RequestParam("file") MultipartFile file,
+                                   @RequestParam("senderId") String senderId,
+                                   @RequestParam("receiverId") String receiverId,
+                                   @RequestParam("chatType") String chatType) {
+        return chatService.uploadVoice(file, senderId, receiverId, chatType);
+    }
 
 }

@@ -79,10 +79,27 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * @return 提取到的token，如果不存在则返回null
      */
     private String extractTokenFromRequest(HttpServletRequest request) {
+        // 首先尝试从Authorization头获取token
         String bearerToken = request.getHeader("Authorization");
         if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
             return bearerToken.substring(7);
         }
+        
+        // 如果Authorization头中没有，尝试从Cookie中获取
+        javax.servlet.http.Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (javax.servlet.http.Cookie cookie : cookies) {
+                if ("token".equals(cookie.getName())) {
+                    String tokenValue = cookie.getValue();
+                    // 移除Bearer前缀（如果存在）
+                    if (tokenValue.startsWith("Bearer ")) {
+                        return tokenValue.substring(7);
+                    }
+                    return tokenValue;
+                }
+            }
+        }
+        
         return null;
     }
     

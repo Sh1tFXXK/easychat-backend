@@ -20,4 +20,14 @@ public class ApiResponseBO<T> {
     public static <T> ApiResponseBO<T> error(String message){
         return new ApiResponseBO<>(false, message, 400, null);
     }
+
+    public static <T> ApiResponseBO<T> success(T data, String message){
+        return new ApiResponseBO<>(true, message, 200, data);
+    }
+    
+    public static ApiResponseBO<Void> success(String message){
+        return new ApiResponseBO<>(true, message, 200, null);
+    }
+
+
 }

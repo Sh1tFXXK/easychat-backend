@@ -20,7 +20,7 @@ public interface ChatInterface {
     
     List<ChatHistory> getChatHistoryList(String sessionId);
 
-    PageResult getChatPage(String userId,String sessionId,int current, Integer pageSize);
+    PageResult<ChatHistory> getChatPage(String userId, String sessionId, int current, Integer pageSize);
 
 
     ApiResponseBO savePictureMsg(MultipartFile file, String senderId,
@@ -28,4 +28,7 @@ public interface ChatInterface {
 
     ApiResponseBO saveFileMsg(MultipartFile file, String senderId,
                               String receiverId, String sessionId);
+
+    ApiResponseBO uploadVoice(MultipartFile file, String senderId,
+                              String receiverId, String chatType);
 }

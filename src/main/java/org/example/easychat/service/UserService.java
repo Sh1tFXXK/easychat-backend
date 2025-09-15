@@ -1,6 +1,7 @@
 package org.example.easychat.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.example.easychat.Entity.PageResult;
 import org.example.easychat.Entity.User;
 import org.example.easychat.Entity.UserSearchResult;
 import org.example.easychat.Mapper.UserMapper;

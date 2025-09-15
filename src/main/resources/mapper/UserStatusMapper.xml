@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="org.example.easychat.Mapper.UserStatusMapper">
+    
+    <!-- 批量更新用户状态 -->
+    <update id="batchUpdateStatus">
+        <foreach collection="statusList" item="status" separator=" ">
+            UPDATE user_status 
+            SET status = #{status.status}, 
+                last_active_time = #{status.lastActiveTime}, 
+                update_time = #{status.updateTime}
+            WHERE user_id = #{status.userId};
+        </foreach>
+    </update>
+    
+    <!-- 获取在线用户列表 -->
+    <select id="getOnlineUsers" resultType="java.lang.String">
+        SELECT user_id 
+        FROM user_status 
+        WHERE status = 'online'
+    </select>
+    
+    <!-- 获取指定时间内活跃的用户 -->
+    <select id="getActiveUsers" resultType="org.example.easychat.Entity.UserStatus">
+        SELECT id, user_id, status, last_active_time, socket_id, create_time, update_time
+        FROM user_status 
+        WHERE last_active_time >= #{since}
+        ORDER BY last_active_time DESC
+    </select>
+    
+    <!-- 清理长时间未活跃的用户状态 -->
+    <update id="cleanInactiveUsers">
+        UPDATE user_status 
+        SET status = 'offline', update_time = NOW()
+        WHERE last_active_time &lt; #{before} 
+        AND status != 'offline'
+    </update>
+    
+    <!-- 根据用户ID获取用户状态 -->
+    <select id="getByUserId" resultType="org.example.easychat.Entity.UserStatus">
+        SELECT id, user_id, status, last_active_time, socket_id, create_time, update_time
+        FROM user_status 
+        WHERE user_id = #{userId}
+    </select>
+    
+    <!-- 更新用户最后活跃时间 -->
+    <update id="updateLastActiveTime">
+        UPDATE user_status 
+        SET last_active_time = #{lastActiveTime}, update_time = NOW()
+        WHERE user_id = #{userId}
+    </update>
+    
+    <!-- 批量获取用户状态 -->
+    <select id="batchGetUserStatus" resultType="org.example.easychat.Entity.UserStatus">
+        SELECT id, user_id, status, last_active_time, socket_id, create_time, update_time
+        FROM user_status 
+        WHERE user_id IN
+        <foreach collection="userIds" item="userId" open="(" separator="," close=")">
+            #{userId}
+        </foreach>
+    </select>
+    
+    <!-- 更新用户Socket ID -->
+    <update id="updateSocketId">
+        UPDATE user_status 
+        SET socket_id = #{socketId}, update_time = NOW()
+        WHERE user_id = #{userId}
+    </update>
+    
+    <!-- 根据Socket ID获取用户状态 -->
+    <select id="getBySocketId" resultType="org.example.easychat.Entity.UserStatus">
+        SELECT id, user_id, status, last_active_time, socket_id, create_time, update_time
+        FROM user_status 
+        WHERE socket_id = #{socketId}
+    </select>
+    
+    <!-- 清理断开连接的Socket ID -->
+    <update id="clearSocketId">
+        UPDATE user_status 
+        SET socket_id = NULL, update_time = NOW()
+        WHERE socket_id = #{socketId}
+    </update>
+</mapper>
