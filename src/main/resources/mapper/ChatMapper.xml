@@ -47,6 +47,9 @@
         from chat_histories where session_id = #{sessionId}
         order by create_time desc limit 1
     </select>
+    <select id="getGroupMemberIds" resultType="java.lang.String">
+        select user_id from group_members where group_id = #{groupId}
+    </select>
 
     <insert id="insert" parameterType="org.example.easychat.Entity.ChatHistory">
         INSERT INTO chat_histories
@@ -54,5 +57,13 @@
         VALUES
         ( #{id}, #{senderId}, #{receiverId}, #{sessionId}, #{type}, #{content}, #{hasRead}, #{showTime}, #{createTime} )
     </insert>
+
+    <insert id="insertCallRecord" parameterType="org.example.easychat.Entity.CallRecord">
+        INSERT INTO call_records
+        ( call_id, caller_id, receiver_id, session_id, call_type, duration, create_time, group_id,end_time )
+        VALUES
+        ( #{id}, #{callerId}, #{receiverId}, #{sessionId}, #{callType}, #{duration}, #{createTime}, #{groupId}, #{endTime} )
+    </insert>
+
 
 </mapper>

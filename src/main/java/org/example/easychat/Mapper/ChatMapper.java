@@ -2,11 +2,10 @@ package org.example.easychat.Mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Delete;
+import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Select;
-import org.example.easychat.Entity.ChatSession;
-import org.example.easychat.Entity.ChatHistory;
-import org.example.easychat.Entity.Message;
+import org.example.easychat.Entity.*;
 
 import java.util.List;
 
@@ -29,4 +28,12 @@ public interface ChatMapper extends BaseMapper<ChatHistory> {
 
     @Delete("delete from chat_sessions where user_id=#{userId} and friend_user_id=#{friendId}")
     void removeChat(String userId, String friendId);
+
+    @Insert("INSERT INTO voice_messages (message_id, sender_id, receiver_id, file_name, file_url, duration, create_time, file_size, chat_type) " +
+            "VALUES (#{messageId}, #{senderId}, #{receiverId}, #{fileName}, #{fileUrl}, #{duration}, #{createTime}, #{fileSize}, #{chatType})")
+    VoiceMessage insertVoiceMessage(VoiceMessage message);
+
+    List<String> getGroupMemberIds(String groupId);
+
+    void insertCallRecord(CallRecord callRecord);
 }

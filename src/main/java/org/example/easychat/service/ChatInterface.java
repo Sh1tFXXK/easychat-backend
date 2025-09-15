@@ -28,4 +28,7 @@ public interface ChatInterface {
 
     ApiResponseBO saveFileMsg(MultipartFile file, String senderId,
                               String receiverId, String sessionId);
+
+    ApiResponseBO uploadVoice(MultipartFile file, String senderId,
+                              String receiverId, String chatType);
 }

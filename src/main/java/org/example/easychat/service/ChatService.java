@@ -104,4 +104,36 @@ public class ChatService implements ChatInterface{
         }
     }
 
+    @Override
+    public ApiResponseBO uploadVoice(MultipartFile file, String senderId,
+                                     String receiverId, String chatType) {
+        // 验证语音文件
+        if (file.isEmpty()) {
+            throw new IllegalArgumentException("语音文件不能为空");
+        }
+        
+        // 验证文件格式
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.startsWith("audio/")) {
+            throw new IllegalArgumentException("文件格式不正确，仅支持音频格式");
+        }
+        
+        // 验证文件大小 (最大10MB)
+        long size = file.getSize();
+        if (size > 10 * 1024 * 1024) {
+            throw new IllegalArgumentException("语音文件大小不能超过10MB");
+        }
+        
+        try {
+            // 上传语音文件到OSS
+            String url = aliOSSUtil.uploadFile(file);
+            log.info("语音文件上传成功: {}", url);
+            return ApiResponseBO.success(url);
+            
+        } catch (IOException e) {
+            log.error("语音文件上传失败", e);
+            throw new RuntimeException("语音文件上传失败");
+        }
     }
+
+}

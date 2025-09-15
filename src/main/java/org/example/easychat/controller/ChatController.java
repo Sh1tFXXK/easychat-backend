@@ -68,7 +68,15 @@ public class ChatController {
         return chatService.saveFileMsg(file, senderId, receiverId, sessionId);
     }
 
-
-
+    /**
+     * 上传语音文件
+     */
+    @PostMapping("chats/uploadVoice")
+    public ApiResponseBO uploadVoice(@RequestParam("file") MultipartFile file,
+                                   @RequestParam("senderId") String senderId,
+                                   @RequestParam("receiverId") String receiverId,
+                                   @RequestParam("chatType") String chatType) {
+        return chatService.uploadVoice(file, senderId, receiverId, chatType);
+    }
 
 }

@@ -11,8 +11,11 @@ import org.example.easychat.Entity.*;
 import org.example.easychat.Mapper.ChatMapper;
 import org.example.easychat.Mapper.GroupChatMapper;
 import org.example.easychat.Mapper.UserMapper;
+import org.example.easychat.dto.AnswerCallRequest;
+import org.example.easychat.dto.RejectCallRequest;
 import org.example.easychat.dto.friendVerifyDto;
 import org.example.easychat.utils.JwtUtil;
+import org.example.easychat.utils.ValidationUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -21,9 +24,8 @@ import org.springframework.stereotype.Component;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
+import java.time.LocalDate;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
@@ -106,6 +108,10 @@ public class ChatSocketIOHandler {
         String userId = client.get("userId");
         if (userId != null) {
             log.info("用户 {} 断开连接，当前在线用户数: {}", userId, sessions.size());
+            
+            // 清理用户的通话会话
+            cleanupUserCalls(userId);
+            
             // 从在线用户列表中移除
             onlineUsers.remove(userId);
             sessions.remove(userId);
@@ -174,7 +180,7 @@ public class ChatSocketIOHandler {
     }
 
     @OnEvent("offline")
-    public void onUserOffline(SocketIOClient client, String userId) {
+    public void onUserOffline( String userId) {
         try {
             log.info("用户下线: userId={}", userId);
 
@@ -277,7 +283,6 @@ public class ChatSocketIOHandler {
                 }
                 return;
             }
-            
             // 验证发送者ID与认证用户ID是否匹配
             if (!authenticatedUserId.equals(message.getSenderId())) {
                 log.warn("发送者ID与认证用户ID不匹配，拒绝群聊请求");
@@ -332,12 +337,10 @@ public class ChatSocketIOHandler {
                     log.info("跳过发送者自己: {}", memberId);
                 }
             }
-            
             // 发送成功响应
             if (ackRequest.isAckRequested()) {
                 ackRequest.sendAckData("success");
             }
-            
             log.info("群聊消息处理完成");
 
         } catch (Exception e) {
@@ -346,6 +349,625 @@ public class ChatSocketIOHandler {
             if (ackRequest.isAckRequested()) {
                 ackRequest.sendAckData(null, "error");
             }
+        }
+    }
+
+    /**
+     * 发送语音消息
+     */
+    @OnEvent("sendVoice")
+    public void onSendVoice(SocketIOClient client, VoiceMessage message, AckRequest ackRequest) {
+        try {
+            log.info("收到语音消息: {}", message);
+            String authenticatedUserId = client.get("userId");
+            if (authenticatedUserId == null || authenticatedUserId.isEmpty()) {
+                log.warn("用户未认证，拒绝语音请求");
+                if(ackRequest.isAckRequested()){
+                    ackRequest.sendAckData(null, "unauthorized");
+                }
+                return;
+            }
+
+            // 验证发送者ID与认证用户ID是否匹配
+            if(!Objects.equals(authenticatedUserId, message.getSenderId())){
+                log.warn("发送者ID与认证用户ID不匹配，拒绝语音请求");
+                if(ackRequest.isAckRequested()){
+                    ackRequest.sendAckData(null, "unauthorized");
+                }
+                return;
+            }
+            //文件格式和大小
+            if(!ValidationUtils.isValidAudioFile(message.getFileName())){
+                log.warn("文件格式错误");
+                if(ackRequest.isAckRequested()){
+                    ackRequest.sendAckData(null, "error");
+                }
+            }
+            if(message.getFileSize()>10*1024*1024){
+                log.warn("文件过大");
+                if(ackRequest.isAckRequested()){
+                    ackRequest.sendAckData(null, "error");
+                }
+            }
+            //时长 语音时长验证（单位：秒）
+            if (message.getDuration() != null) {
+                if (message.getDuration() > 60){
+                    log.warn("语音时长超过60秒");
+                    if(ackRequest.isAckRequested()){
+                        ackRequest.sendAckData(null,"duration  too long ");
+                    }
+                    return;
+                }
+                if (message.getDuration() < 1){
+                    log.warn("语音时长小于1秒");
+                    if (ackRequest.isAckRequested()){
+                        ackRequest.sendAckData(null, "duration too short");
+                    }
+                    return;
+                }
+            }
+
+            // 设置消息时间戳
+            message.setCreateTime(java.sql.Date.valueOf(LocalDate.now()));
+            message.setId(Long.valueOf(jwtUtil.generateCode()));
+
+            // 保存语音消息到数据库
+            VoiceMessage savedMessage = chatMapper.insertVoiceMessage(message);
+
+            // 获取发送者信息
+            User sender = userMapper.getUserById(message.getSenderId());
+            String senderUsername = sender != null ? sender.getNickName() : "未知用户";
+
+            // 构建要广播的消息
+            Map<String, Object> broadcastData = new HashMap<>();
+            broadcastData.put("messageId", savedMessage.getId());
+            broadcastData.put("senderId", message.getSenderId());
+            broadcastData.put("senderName", senderUsername);
+            broadcastData.put("receiverId", message.getReceiverId());
+            broadcastData.put("voiceUrl", message.getFileUrl());
+            broadcastData.put("duration", message.getDuration());
+            broadcastData.put("createTime", message.getCreateTime());
+            broadcastData.put("type", "voice");
+            broadcastData.put("fileName", message.getFileName());
+            broadcastData.put("fileSize", message.getFileSize());
+
+            // 判断是群聊还是私聊（假设群ID以"group_"开头）
+
+            if(message.getChatType()==1){
+                // 群聊消息处理
+                String groupId = message.getReceiverId();
+
+                // 获取群成员列表
+                List<String> groupMembers = chatMapper.getGroupMemberIds(groupId);
+                if (groupMembers == null || groupMembers.isEmpty()) {
+                    log.warn("群组 {} 没有成员", groupId);
+                    if(ackRequest.isAckRequested()){
+                        ackRequest.sendAckData(null, "group_not_found");
+                    }
+                    return;
+                }
+
+                // 记录成功发送数量
+                int successCount = 0;
+
+                // 向每个群成员发送消息（除了发送者自己）
+                for (String memberId : groupMembers) {
+                    if (!memberId.equals(message.getSenderId())) {
+                        SocketIOClient memberClient = findClientById(memberId);
+                        if (memberClient != null && memberClient.isChannelOpen()) {
+                            memberClient.sendEvent("receiveGroupVoice", broadcastData);
+                            successCount++;
+                            log.debug("语音消息已发送给群成员: {}", memberId);
+                        } else {
+                            log.debug("群成员 {} 离线", memberId);
+                        }
+                    }
+                }
+
+                log.info("群语音消息发送完成，成功发送给 {} 个在线成员", successCount);
+            }else {
+                // 私聊消息处理
+                SocketIOClient receiverClient = findClientById(message.getReceiverId());
+
+                if (receiverClient != null && receiverClient.isChannelOpen()){
+                    receiverClient.sendEvent("receiveVoice", broadcastData);
+                    log.info("发送语音消息给接收者成功");
+                }else {
+                    // 接收者离线
+                    log.info("接收者 {} 离线，保存为离线消息", message.getReceiverId());
+                    // 可以在这里添加推送通知逻辑
+                    // pushNotificationService.sendOfflineVoiceNotification(receiverId, senderUsername);
+                }
+            }
+
+            // 发送确认给发送者
+            if(ackRequest.isAckRequested()){
+                Map<String, Object> ackData = new HashMap<>();
+                ackData.put("success", true);
+                ackData.put("messageId", savedMessage.getId());
+                ackData.put("timestamp", message.getCreateTime());
+                ackData.put("isGroup", message.getChatType());
+                ackRequest.sendAckData(ackData);
+            }
+
+        } catch (Exception e) {
+            log.error("处理语音消息时发生错误", e);
+
+            // 发送错误响应
+            if(ackRequest.isAckRequested()){
+                Map<String, Object> errorData = new HashMap<>();
+                errorData.put("success", false);
+                errorData.put("error", "发送语音消息失败: " + e.getMessage());
+                ackRequest.sendAckData(errorData);
+            }
+        }
+    }
+    /**
+     * 根据用户ID查找客户端
+     */
+    private SocketIOClient findClientById(String userId) {
+        Collection<SocketIOClient> clients = socketIOServer.getAllClients();
+        log.info("查找用户 {} 的客户端连接，当前总连接数: {}", userId, clients.size());
+        
+        for (SocketIOClient client : clients) {
+            String clientUserId = client.get("userId");
+            log.debug("检查客户端 {} 的用户ID: {}", client.getSessionId(), clientUserId);
+            if (userId != null && userId.equals(clientUserId)) {
+                log.info("找到用户 {} 的客户端连接: {}", userId, client.getSessionId());
+                return client;
+            }
+        }
+        
+        log.warn("未找到用户 {} 的客户端连接", userId);
+        
+        // 打印所有在线用户的详细信息
+        log.info("当前所有在线客户端:");
+        for (SocketIOClient client : clients) {
+            String clientUserId = client.get("userId");
+            log.info("  - 会话ID: {}, 用户ID: {}", client.getSessionId(), clientUserId);
+        }
+        
+        return null;
+    }
+
+    //存储当前通话状态
+    private final  Map<String, CallSession> activeCalls = new ConcurrentHashMap<>();
+    /**
+     * 发起语音通话
+     * @param client
+     */
+    @OnEvent("startVoiceCall")
+    public void onStartVoiceCall(SocketIOClient client, VoiceCallRequest request, AckRequest ackRequest) {
+        try {
+            String callerId = client.get("userId");
+            if(callerId == null || !callerId.equals(request.getCallerId())){
+                ackRequest.sendAckData(null, "invalid_caller_id");
+            }
+            //检查是否在已在通话中
+            if(isUserInCall(callerId)){
+                ackRequest.sendAckData(null, "already_in_call");
+            }
+            //生成通话ID
+            String callId = UUID.randomUUID().toString();
+
+            //创建通话会话
+            CallSession callSession = new CallSession();
+            callSession.setCallId(callId);
+            callSession.setCallerId(callerId);
+            callSession.setReceiverId(request.getReceiverId());
+            callSession.setCallType(request.getCallType());
+            callSession.setStatus("calling");
+            callSession.setStartTime(System.currentTimeMillis());
+
+            activeCalls.put(callId, callSession);
+
+            //获取主叫方消息
+            User caller = userMapper.getUserById(callerId);
+            //构建通话请求数据
+            Map<String, Object> callerData = new HashMap<>();
+            callerData.put("callId", callId);
+            callerData.put("caller", caller);
+            callerData.put("sdpOffer", request.getSdpOffer());
+            callerData.put("callType", request.getCallType());
+            callerData.put("callerName", caller.getNickName());
+            callerData.put("callerAvatar", caller.getAvatar());
+
+            // 判断是否为群组通话
+            boolean isGroupCall = request.getReceiverId().startsWith("group_");
+            if (isGroupCall){
+                //群组通话
+                callSession.setGroupCall(true);
+                callSession.setGroupId(request.getReceiverId());
+
+                //获取群成员
+                List<String> groupMembers = chatMapper.getGroupMemberIds(request.getReceiverId());
+                callSession.setParticipants(new HashSet<>(groupMembers));
+
+                //通知所有在线成员
+                for (String membersId : groupMembers){
+                    if (!membersId.equals(callerId)){
+                        SocketIOClient memberClient = findClientById(membersId);
+                        if (memberClient !=null){
+                            memberClient.sendEvent("incomingFroupCall",callerData);
+                        }
+                    }
+                }
+            }else {
+                //一对一通话
+                log.info("开始查找接收方 {} 的客户端连接", request.getReceiverId());
+                SocketIOClient receiverClient = findClientById(request.getReceiverId());
+
+                if(receiverClient == null){
+                    log.warn("接收方 {} 不在线，无法发起通话", request.getReceiverId());
+                    activeCalls.remove(callId);
+                    ackRequest.sendAckData(null,"receiver_offline");
+                    return;
+                }
+                
+                log.info("找到接收方 {} 的客户端连接: {}", request.getReceiverId(), receiverClient.getSessionId());
+                
+                // 检查接收方是否在通话中
+                log.info("检查接收方 {} 是否在通话中", request.getReceiverId());
+                if(isUserInCall(request.getReceiverId())){
+                    log.warn("接收方 {} 正在通话中，拒绝新的通话请求", request.getReceiverId());
+                    activeCalls.remove(callId);
+                    ackRequest.sendAckData(null,"receiver_busy");
+                    return;
+                }
+                
+                log.info("接收方 {} 不在通话中，准备发送来电通知", request.getReceiverId());
+                log.info("发送 incomingCall 事件到客户端 {}, 数据: {}", receiverClient.getSessionId(), callerData);
+                
+                try {
+                    receiverClient.sendEvent("incomingCall", callerData);
+                    log.info("成功发送 incomingCall 事件到接收方 {}", request.getReceiverId());
+                } catch (Exception e) {
+                    log.error("发送 incomingCall 事件失败: ", e);
+                    activeCalls.remove(callId);
+                    ackRequest.sendAckData(null, "send_event_failed");
+                    return;
+                }
+            }
+
+            // 返回成功响应
+            Map<String,Object> response = new HashMap<>();
+            response.put("success",true);
+            response.put("callId",callId);
+            ackRequest.sendAckData(response);
+
+        }catch (Exception e){
+            log.warn("发起通话失败",e);
+            ackRequest.sendAckData(null,"error");
+        }
+
+    }
+    /**
+     * 接听通话
+     */
+    @OnEvent("answerCall")
+    public void onAnswerCall(SocketIOClient client, AnswerCallRequest request, AckRequest ackRequest){
+        try{
+            String userId = client.get("userId");
+            CallSession session = activeCalls.get(request.getCallId());
+
+            if (session == null) {
+                ackRequest.sendAckData(null, "call_not_found");
+            }
+
+            // 更新通话状态
+            if (session != null) {
+                session.setStatus("connected");
+            }
+            if (session != null) {
+                session.setConnectedTime(System.currentTimeMillis());
+            }
+            if (session.isGroupCall()) {
+                // 群组通话：添加参与者
+                session.getActiveParticipants().add(userId);
+
+                // 通知所有参与者有新成员加入
+                broadcastToCallParticipants(session, "participantJoined", Map.of(
+                        "userId", userId,
+                        "sdpAnswer", request.getSdpAnswer()
+                ), userId);
+            }else {
+                // 一对一通话：更新通话信息
+                SocketIOClient callerClient = findClientById(session.getCallerId());
+                if (callerClient != null){
+                    Map<String, Object> response = new HashMap<>();
+                    response.put("callId",request.getCallId());
+                    response.put("sdpAnswer",request.getSdpAnswer());
+                    callerClient.sendEvent("callAnswered",response);
+                }
+            }
+
+            // 返回成功响应
+            ackRequest.sendAckData(Map.of("success", true));
+        }catch (Exception e){
+            log.warn("接听通话失败",e);
+            ackRequest.sendAckData(null,"error");
+        }
+    }
+    /**
+     * 拒绝通话
+     */
+    @OnEvent("rejectCall")
+    public void onRejectCall(SocketIOClient client, RejectCallRequest request, AckRequest ackRequest){
+        try{
+            String userId = client.get("userId");
+            CallSession session = activeCalls.get(request.getCallId());
+
+            if (session == null) {
+                ackRequest.sendAckData(null, "call_not_found");
+            }
+            // 拒绝通话
+            SocketIOClient callerClient = findClientById(session.getCallerId());
+            if (callerClient != null){
+                Map<String, Object> response = new HashMap<>();
+                response.put("callId",request.getCallId());
+                response.put("reason",request.getReason());
+                callerClient.sendEvent("callRejected",response);
+            }
+            // 移除通话
+            activeCalls.remove(request.getCallId());
+            ackRequest.sendAckData(Map.of("success", true));
+        }catch (Exception e){
+            log.warn("拒绝通话失败",e);
+            ackRequest.sendAckData(null,"error");
+        }
+    }
+    /**
+     * 挂断通话
+     */
+    @OnEvent("endCall")
+    public void onEndCall(SocketIOClient client, String callId, AckRequest ackRequest){
+        try{
+            String userId = client.get("userId");
+            log.info("用户 {} 请求结束通话: {}", userId, callId);
+            
+            CallSession session = activeCalls.get(callId);
+            if (session == null) {
+                log.warn("未找到通话会话，callId: {}", callId);
+                ackRequest.sendAckData(null, "call_not_found");
+                return;
+            }
+
+            if (session.isGroupCall()) {
+                // 群组通话：移除参与者
+                session.getActiveParticipants().remove(userId);
+                // 通知所有参与者有成员退出
+                if (!session.getActiveParticipants().isEmpty()){
+                    broadcastToCallParticipants(session, "participantLeft", Map.of(
+                            "userId", userId
+                    ), userId);
+                }else {
+                    // 通话结束
+                    activeCalls.remove(callId);
+                }
+            }else {
+                // 一对一通话：结束通话
+                String otherUserId = session.getCallerId().equals(userId) ? session.getReceiverId() : session.getCallerId();
+                SocketIOClient otherUserClient = findClientById(otherUserId);
+                if (otherUserClient != null){
+                    otherUserClient.sendEvent("callEnded", Map.of("callId", callId));
+                    endCallSession(callId);
+                }
+                ackRequest.sendAckData(Map.of("success", true));
+            }
+        }catch (Exception e){
+            log.warn("挂断通话失败",e);
+            ackRequest.sendAckData(null,"error");
+        }
+    }
+
+    /**
+     * 清理过期的通话会话
+     */
+    private void cleanupExpiredCalls() {
+        long currentTime = System.currentTimeMillis();
+        long expireTime = 2 * 60 * 1000; // 2分钟超时（缩短超时时间）
+        
+        int beforeSize = activeCalls.size();
+        activeCalls.entrySet().removeIf(entry -> {
+            CallSession session = entry.getValue();
+            long duration = currentTime - session.getStartTime();
+            
+            // 清理条件：
+            // 1. 超过2分钟的会话
+            // 2. 状态为 "calling" 且超过30秒的会话（可能是未接听的通话）
+            boolean isExpired = duration > expireTime || 
+                              ("calling".equals(session.getStatus()) && duration > 30 * 1000);
+            
+            if (isExpired) {
+                log.info("清理过期通话会话: {}, 状态: {}, 持续时间: {}秒", 
+                    entry.getKey(), session.getStatus(), duration / 1000);
+            }
+            return isExpired;
+        });
+        
+        int afterSize = activeCalls.size();
+        if (beforeSize != afterSize) {
+            log.info("清理过期通话会话完成，清理前: {}, 清理后: {}", beforeSize, afterSize);
+        }
+    }
+
+    /**
+     * 强制清理所有通话会话（调试用）
+     */
+    public void forceCleanupAllCalls() {
+        int size = activeCalls.size();
+        activeCalls.clear();
+        log.warn("强制清理所有通话会话，共清理 {} 个会话", size);
+    }
+
+    /**
+     * 清理用户的通话会话
+     */
+    private void cleanupUserCalls(String userId) {
+        activeCalls.entrySet().removeIf(entry -> {
+            CallSession session = entry.getValue();
+            boolean shouldRemove = session.getCallerId().equals(userId) || 
+                                 session.getReceiverId().equals(userId) ||
+                                 (session.isGroupCall() && session.getActiveParticipants().contains(userId));
+            
+            if (shouldRemove) {
+                log.info("清理用户 {} 的通话会话: {}", userId, entry.getKey());
+                
+                // 通知其他参与者通话结束
+                if (session.isGroupCall()) {
+                    broadcastToCallParticipants(session, "callEnded", 
+                        Map.of("callId", entry.getKey(), "reason", "participant_disconnected"), userId);
+                } else {
+                    // 一对一通话，通知对方
+                    String otherUserId = session.getCallerId().equals(userId) ? 
+                        session.getReceiverId() : session.getCallerId();
+                    SocketIOClient otherClient = findClientById(otherUserId);
+                    if (otherClient != null) {
+                        otherClient.sendEvent("callEnded", 
+                            Map.of("callId", entry.getKey(), "reason", "peer_disconnected"));
+                    }
+                }
+            }
+            
+            return shouldRemove;
+        });
+    }
+
+    /**
+     * 检查用户是否在通话中（排除当前客户端）
+     */
+    private boolean isUserInCall(String userId) {
+        return isUserInCall(userId, null);
+    }
+    
+    /**
+     * 检查用户是否在通话中（可排除指定客户端）
+     */
+    private boolean isUserInCall(String userId, SocketIOClient excludeClient) {
+        // 先清理过期的通话会话
+        cleanupExpiredCalls();
+        
+        log.info("检查用户 {} 是否在通话中，当前活跃通话数: {}", userId, activeCalls.size());
+        
+        // 打印所有活跃通话会话的详细信息
+        for (Map.Entry<String, CallSession> entry : activeCalls.entrySet()) {
+            CallSession session = entry.getValue();
+            log.info("活跃通话会话 - ID: {}, 发起者: {}, 接收者: {}, 状态: {}, 开始时间: {}", 
+                entry.getKey(), session.getCallerId(), session.getReceiverId(), 
+                session.getStatus(), new java.util.Date(session.getStartTime()));
+        }
+        
+        boolean inCall = activeCalls.values().stream()
+                .anyMatch(session -> {
+                    // 检查会话状态是否为已连接
+                    if (!"connected".equals(session.getStatus())) {
+                        log.info("跳过非连接状态的会话: {}, 状态: {}", session.getCallId(), session.getStatus());
+                        return false;
+                    }
+                    
+                    boolean matches = session.getCallerId().equals(userId) ||
+                                    session.getReceiverId().equals(userId) ||
+                                    (session.isGroupCall() && session.getActiveParticipants().contains(userId));
+                    
+                    if (matches) {
+                        log.info("用户 {} 匹配到活跃通话会话 - 发起者: {}, 接收者: {}, 状态: {}", 
+                            userId, session.getCallerId(), session.getReceiverId(), session.getStatus());
+                    }
+                    
+                    return matches;
+                });
+        
+        log.info("用户 {} 通话状态检查结果: {}", userId, inCall);
+        
+        return inCall;
+    }
+    /**
+     * 交换ICE候选
+     */
+    @OnEvent("iceCandidate")
+    public void onIceCandidate(SocketIOClient client, IceCandidateRequest request, AckRequest ackRequest) {
+        try {
+            String userId = client.get("userId");
+            CallSession session = activeCalls.get(request.getCallId());
+            // 添加对 session 为 null 的检查
+            if (session == null) {
+                log.warn("未找到通话会话，callId: {}", request.getCallId());
+                if (ackRequest.isAckRequested()) {
+                    ackRequest.sendAckData(null, "call_not_found");
+                }
+                return;
+            }
+            Map<String, Object> response = new HashMap<>();
+            response.put("callId", request.getCallId());
+            response.put("candidate", request.getCandidate());
+            response.put("fromUserId",userId);
+
+            if (session.isGroupCall()){
+                // 群组通话：广播ICE候选
+                if(request.getTargetUserId()!= null){
+                    SocketIOClient targetUserClient = findClientById(request.getTargetUserId());
+                    if (targetUserClient != null){
+                        targetUserClient.sendEvent("iceCandidate", response);
+                    }
+                }
+            }else {
+                // 一对一通话：发送ICE候选
+                String targetUserId = session.getCallerId().equals(userId) ? session.getReceiverId() : session.getCallerId();
+                SocketIOClient targetUserClient = findClientById(targetUserId);
+                if (targetUserClient != null){
+                    targetUserClient.sendEvent("iceCandidate", response);
+                }
+            }
+        }catch (Exception e){
+            log.warn("交换ICE候选失败",e);
+        }
+    }
+    /**
+     * 向通话参与者广播消息
+     */
+    private void broadcastToCallParticipants(CallSession session, String eventName,Map<String, Object> data, String excludeUserId) {
+        for (String participantId : session.getParticipants()) {
+            if (!participantId.equals(excludeUserId)) {
+                SocketIOClient participantClient = findClientById(participantId);
+                if (participantClient != null) {
+                    participantClient.sendEvent(eventName, data);
+                }
+            }
+        }
+    }
+    /**
+     * 结束通话会话
+     */
+    private void endCallSession(String callId) {
+        CallSession session = activeCalls.remove(callId);
+        if (session != null) {
+            // 记录通话日志
+            long duration = System.currentTimeMillis() - session.getStartTime();
+            log.info("通话结束 - ID: {}, 时长: {}秒", callId, duration / 1000);
+
+            // 保存通话记录到数据库
+            saveCallRecord(session, duration);
+        }
+    }
+    /**
+     * 保存通话记录到数据库
+     */
+    private void saveCallRecord(CallSession session, long duration) {
+        try {
+            CallRecord callRecord = new CallRecord();
+            callRecord.setCallId(session.getCallId());
+            callRecord.setCallerId(session.getCallerId());
+            callRecord.setReceiverId(session.getReceiverId());
+            callRecord.setGroupId(session.isGroupCall() ? session.getGroupId() : null);
+            callRecord.setCallType(session.getCallType());
+            callRecord.setDuration(duration);
+            callRecord.setStartTime(new Date(session.getStartTime()));
+            callRecord.setEndTime(new Date(session.getStartTime() + duration));
+
+            chatMapper.insertCallRecord(callRecord);
+            log.info("通话记录已保存: {}", callRecord);
+        } catch (Exception e) {
+            log.error("保存通话记录失败", e);
         }
     }
 
@@ -388,7 +1010,7 @@ public class ChatSocketIOHandler {
        if(newStatus == 1){
            onUserOnline(userId, newStatus, client);
        } else if (newStatus ==0) {
-           onUserOffline(client, userId);
+           onUserOffline(userId);
        }
     }
     /**
