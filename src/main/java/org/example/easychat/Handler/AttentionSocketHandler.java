@@ -4,15 +4,16 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.StringUtils;
 import com.corundumstudio.socketio.SocketIOClient;
 import com.corundumstudio.socketio.SocketIOServer;
-import com.corundumstudio.socketio.annotation.OnConnect;
-import com.corundumstudio.socketio.annotation.OnDisconnect;
 import com.corundumstudio.socketio.annotation.OnEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.example.easychat.Entity.SpecialAttention;
 import org.example.easychat.Entity.User;
 import org.example.easychat.Mapper.SpecialAttentionMapper;
 import org.example.easychat.dto.*;
-import org.example.easychat.service.NotificationService;
+import org.example.easychat.event.AttentionMessageEvent;
+import org.example.easychat.event.AttentionStatusChangeEvent;
+import org.example.easychat.event.AttentionUserOfflineEvent;
+import org.example.easychat.event.AttentionUserOnlineEvent;
 import org.example.easychat.service.SpecialAttentionService;
 import org.example.easychat.service.UserService;
 import org.example.easychat.service.UserStatusService;
@@ -38,14 +39,8 @@ public class AttentionSocketHandler {
     private UserService userService;
     
     @Autowired
-    private SpecialAttentionService specialAttentionService;
-    
-    @Autowired
     private SpecialAttentionMapper specialAttentionMapper;
-    
-    @Autowired
-    private org.example.easychat.event.AttentionEventPublisher eventPublisher;
-    
+
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
     
@@ -55,7 +50,7 @@ public class AttentionSocketHandler {
      * 特别关心更新事件
      */
     @OnEvent("attentionUpdate")
-    public void onAttentionUpdate(SocketIOClient client, AttentionUpdateEvent event) {
+    public void onAttentionUpdate(SocketIOClient client, attentionUpdateEvent event) {
         String userId = getUserIdFromClient(client);
 
         // 验证权限
@@ -88,7 +83,7 @@ public class AttentionSocketHandler {
      * 用户状态变化事件
      */
     @OnEvent("userStatusChange")
-    public void onUserStatusChange(SocketIOClient client, UserStatusChangeEvent event) {
+    public void onUserStatusChange(SocketIOClient client, userStatusChangeEvent event) {
         String userId = getUserIdFromClient(client);
 
         // 验证权限
@@ -339,7 +334,7 @@ public class AttentionSocketHandler {
     /**
      * 验证特别关心更新事件
      */
-    private boolean validateAttentionUpdateEvent(AttentionUpdateEvent event) {
+    private boolean validateAttentionUpdateEvent(attentionUpdateEvent event) {
         if (StringUtils.isBlank(event.getUserId()) || 
             StringUtils.isBlank(event.getTargetUserId()) ||
             StringUtils.isBlank(event.getEventType())) {
@@ -365,7 +360,7 @@ public class AttentionSocketHandler {
     /**
      * 广播特别关心更新
      */
-    private void broadcastAttentionUpdate(AttentionUpdateEvent event) {
+    private void broadcastAttentionUpdate(attentionUpdateEvent event) {
         CompletableFuture.runAsync(() -> {
             try {
                 // 发送给目标用户

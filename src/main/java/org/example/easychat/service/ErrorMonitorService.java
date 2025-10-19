@@ -28,6 +28,27 @@ public class ErrorMonitorService {
     private static final DateTimeFormatter HOUR_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH");
     private static final DateTimeFormatter DAY_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
+    // 安全数值转换，避免 Redis 返回 Integer/Long/字符串混用导致的类型转换异常
+    private long safeToLong(Object v) {
+        if (v == null) return 0L;
+        if (v instanceof Number) return ((Number) v).longValue();
+        try {
+            return Long.parseLong(v.toString());
+        } catch (Exception e) {
+            return 0L;
+        }
+    }
+
+    private Double safeToDouble(Object v) {
+        if (v == null) return null;
+        if (v instanceof Number) return ((Number) v).doubleValue();
+        try {
+            return Double.parseDouble(v.toString());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     /**
      * 记录错误指标
      */
@@ -109,10 +130,10 @@ public class ErrorMonitorService {
         redisTemplate.expire(totalCountKey, 1, TimeUnit.DAYS);
         
         // 计算错误率
-        Long errorCount = (Long) redisTemplate.opsForValue().get(errorCountKey);
-        Long totalCount = (Long) redisTemplate.opsForValue().get(totalCountKey);
+        long errorCount = safeToLong(redisTemplate.opsForValue().get(errorCountKey));
+        long totalCount = safeToLong(redisTemplate.opsForValue().get(totalCountKey));
         
-        if (errorCount != null && totalCount != null && totalCount > 0) {
+        if (totalCount > 0) {
             double errorRate = (double) errorCount / totalCount * 100;
             String rateKey = ERROR_RATE_KEY + errorType + ":" + hourKey;
             redisTemplate.opsForValue().set(rateKey, errorRate, 1, TimeUnit.DAYS);
@@ -124,9 +145,9 @@ public class ErrorMonitorService {
      */
     private void checkErrorThreshold(String errorType, String hourKey) {
         String errorCountKey = ERROR_COUNT_KEY + errorType + ":" + hourKey;
-        Long errorCount = (Long) redisTemplate.opsForValue().get(errorCountKey);
+        long errorCount = safeToLong(redisTemplate.opsForValue().get(errorCountKey));
         
-        if (errorCount != null) {
+        if (errorCount > 0) {
             // 检查错误数量阈值
             if (errorCount > getErrorThreshold(errorType)) {
                 triggerErrorAlert(errorType, errorCount, hourKey);
@@ -134,7 +155,7 @@ public class ErrorMonitorService {
             
             // 检查错误率阈值
             String rateKey = ERROR_RATE_KEY + errorType + ":" + hourKey;
-            Double errorRate = (Double) redisTemplate.opsForValue().get(rateKey);
+            Double errorRate = safeToDouble(redisTemplate.opsForValue().get(rateKey));
             if (errorRate != null && errorRate > getErrorRateThreshold(errorType)) {
                 triggerErrorRateAlert(errorType, errorRate, hourKey);
             }
@@ -247,7 +268,7 @@ public class ErrorMonitorService {
             for (Object errorType : errorCounts.keySet()) {
                 if (!"total".equals(errorType)) {
                     String rateKey = ERROR_RATE_KEY + errorType + ":" + now.format(HOUR_FORMATTER);
-                    Double rate = (Double) redisTemplate.opsForValue().get(rateKey);
+                    Double rate = safeToDouble(redisTemplate.opsForValue().get(rateKey));
                     if (rate != null) {
                         errorRates.put(errorType.toString(), rate);
                     }

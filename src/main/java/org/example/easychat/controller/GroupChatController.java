@@ -22,7 +22,7 @@ import java.util.Map;
  * 群聊
  */
 @RestController
-@RequestMapping("/group")
+@RequestMapping("/api/group")
 public class GroupChatController {
 
     @Autowired

@@ -1,8 +1,8 @@
 package org.example.easychat.controller;
 
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.example.easychat.BO.ApiResponseBO;
 import org.example.easychat.VO.AttentionCheckResult;
@@ -25,8 +25,8 @@ import javax.validation.constraints.NotBlank;
  */
 @Slf4j
 @RestController
-@RequestMapping("/user/special-attention")
-@Api(tags = "特别关心管理", description = "特别关心功能相关接口")
+@RequestMapping("/api/user/special-attention")
+@Tag(name = "特别关心管理", description = "特别关心功能相关接口")
 public class SpecialAttentionController {
 
     @Autowired
@@ -42,7 +42,7 @@ public class SpecialAttentionController {
      * @param request HTTP请求对象
      * @return 特别关心列表
      */
-    @ApiOperation(value = "获取特别关心列表", notes = "获取用户的特别关心列表，支持分页和状态筛选")
+    @Operation(summary = "获取特别关心列表", description = "获取用户的特别关心列表，支持分页和状态筛选")
     @GetMapping
     public ApiResponseBO<org.example.easychat.Entity.PageResult<SpecialAttentionVO>> getAttentionList(
             @Valid @ModelAttribute AttentionQueryDTO queryDTO,
@@ -63,7 +63,7 @@ public class SpecialAttentionController {
      * @param request HTTP请求对象
      * @return 添加成功的特别关心信息
      */
-    @ApiOperation(value = "添加特别关心", notes = "为用户添加一个特别关心关系")
+    @Operation(summary = "添加特别关心", description = "为用户添加一个特别关心关系")
     @PostMapping
     public ApiResponseBO<SpecialAttentionVO> addAttention(
             @Valid @RequestBody AttentionAddDTO addDTO,
@@ -87,7 +87,7 @@ public class SpecialAttentionController {
      * @param request HTTP请求对象
      * @return 操作结果
      */
-    @ApiOperation(value = "删除特别关心", notes = "删除用户的特别关心关系")
+    @Operation(summary = "删除特别关心", description = "删除用户的特别关心关系")
     @DeleteMapping
     public ApiResponseBO<Void> removeAttention(
             @Valid @RequestBody AttentionRemoveDTO removeDTO,
@@ -108,7 +108,7 @@ public class SpecialAttentionController {
      * @param request HTTP请求对象
      * @return 操作结果
      */
-    @ApiOperation(value = "根据目标用户ID删除特别关心", notes = "根据目标用户ID删除特别关心关系")
+    @Operation(summary = "根据目标用户ID删除特别关心", description = "根据目标用户ID删除特别关心关系")
     @DeleteMapping("/by-user")
     public ApiResponseBO<Void> removeAttentionByUser(
             @Valid @RequestBody AttentionRemoveByUserDTO removeDTO,
@@ -134,7 +134,7 @@ public class SpecialAttentionController {
      * @param request HTTP请求对象
      * @return 操作结果
      */
-    @ApiOperation(value = "更新特别关心设置", notes = "更新特别关心的通知设置")
+    @Operation(summary = "更新特别关心设置", description = "更新特别关心的通知设置")
     @PutMapping
     public ApiResponseBO<Void> updateAttention(
             @Valid @RequestBody AttentionUpdateDTO updateDTO,
@@ -155,7 +155,7 @@ public class SpecialAttentionController {
      * @param request HTTP请求对象
      * @return 批量操作结果
      */
-    @ApiOperation(value = "批量操作特别关心", notes = "批量添加或删除特别关心关系")
+    @Operation(summary = "批量操作特别关心", description = "批量添加或删除特别关心关系")
     @PostMapping("/batch")
     public ApiResponseBO<BatchOperationResult> batchOperation(
             @Valid @RequestBody AttentionBatchDTO batchDTO,
@@ -177,11 +177,11 @@ public class SpecialAttentionController {
      * @param request HTTP请求对象
      * @return 特别关心状态检查结果
      */
-    @ApiOperation(value = "检查特别关心状态", notes = "检查两个用户之间是否存在特别关心关系")
+    @Operation(summary = "检查特别关心状态", description = "检查两个用户之间是否存在特别关心关系")
     @GetMapping("/check")
     public ApiResponseBO<AttentionCheckResult> checkAttentionStatus(
-            @ApiParam(value = "用户ID", required = true) @RequestParam @NotBlank String userId,
-            @ApiParam(value = "目标用户ID", required = true) @RequestParam @NotBlank String targetUserId,
+            @Parameter(description = "用户ID", required = true) @RequestParam @NotBlank String userId,
+            @Parameter(description = "目标用户ID", required = true) @RequestParam @NotBlank String targetUserId,
             HttpServletRequest request) {
         
         // IP限流检查
@@ -199,7 +199,7 @@ public class SpecialAttentionController {
      * @param request HTTP请求对象
      * @return 特别关心更新结果
      */
-    @ApiOperation(value = "获取特别关心更新", notes = "获取指定时间之后的特别关心更新")
+    @Operation(summary = "获取特别关心更新", description = "获取指定时间之后的特别关心更新")
     @GetMapping("/updates")
     public ApiResponseBO<AttentionUpdatesResult> getAttentionUpdates(
             @Valid @ModelAttribute AttentionUpdatesDTO updatesDTO,

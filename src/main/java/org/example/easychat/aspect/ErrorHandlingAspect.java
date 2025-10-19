@@ -5,7 +5,7 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Pointcut;
-import org.example.easychat.Handler.BusinessException;
+import org.example.easychat.Exception.BusinessException;
 import org.example.easychat.service.ErrorMonitorService;
 import org.example.easychat.utils.ErrorHandlingUtil;
 import org.springframework.beans.factory.annotation.Autowired;

@@ -131,7 +131,7 @@
     </logger>
 
     <!-- 业务异常Logger -->
-    <logger name="org.example.easychat.Handler.BusinessException" level="WARN" additivity="false">
+    <logger name="org.example.easychat.Exception.BusinessException" level="WARN" additivity="false">
         <appender-ref ref="BUSINESS_ERROR_FILE"/>
         <appender-ref ref="CONSOLE"/>
     </logger>

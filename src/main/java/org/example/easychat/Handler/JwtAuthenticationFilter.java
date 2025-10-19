@@ -55,7 +55,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         if (token != null && validateJwtToken(token)) {
             // 2. 验证Token并解析出用户ID（支持两种映射）
-            String userId = getUserIdFromToken(token);
+            String userId = jwtUtil.getUserIdFromToken(token);
 
             if (userId != null) {
                 // 3. 加载用户信息 (从数据库查询)
@@ -122,18 +122,5 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return false;
         }
     }
-    
-    /**
-     * 从token中获取用户ID
-     * @param token JWT token
-     * @return 用户ID
-     */
-    private String getUserIdFromToken(String token) {
-        try {
-            // 仅从JWT解析 userId
-            return jwtUtil.getUserIdFromToken(token);
-        } catch (Exception e) {
-            return null;
-        }
-    }
+
 }

@@ -1,8 +1,8 @@
 package org.example.easychat.utils;
 
 import lombok.extern.slf4j.Slf4j;
-import org.example.easychat.Handler.BusinessException;
-import org.example.easychat.Handler.ErrorCode;
+import org.example.easychat.Exception.BusinessException;
+import org.example.easychat.Entity.ErrorCode;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
@@ -103,14 +103,14 @@ public class ErrorHandlingUtil {
      */
     private static BusinessException convertDataAccessException(DataAccessException e, String operationName) {
         if (e instanceof DuplicateKeyException) {
-            return new BusinessException(ErrorCode.DATA_INTEGRITY_ERROR, "数据重复，操作失败", e);
+            return new BusinessException(ErrorCode.DATA_INTEGRITY_ERROR.getCode(), "数据重复，操作失败", e);
         }
         
         if (e instanceof DataIntegrityViolationException) {
-            return new BusinessException(ErrorCode.DATA_INTEGRITY_ERROR, "数据完整性约束违反", e);
+            return new BusinessException(ErrorCode.DATA_INTEGRITY_ERROR.getCode(), "数据完整性约束违反", e);
         }
         
-        return new BusinessException(ErrorCode.DATABASE_ERROR, "数据库操作失败: " + operationName, e);
+        return new BusinessException(ErrorCode.DATABASE_ERROR.getCode(), "数据库操作失败: " + operationName, e);
     }
 
     /**
@@ -123,20 +123,20 @@ public class ErrorHandlingUtil {
         // 根据SQL状态码和错误码进行具体分类
         if ("23000".equals(sqlState)) {
             // 完整性约束违反
-            return new BusinessException(ErrorCode.DATA_INTEGRITY_ERROR, "数据完整性约束违反", e);
+            return new BusinessException(ErrorCode.DATA_INTEGRITY_ERROR.getCode(), "数据完整性约束违反", e);
         }
         
         if ("42000".equals(sqlState)) {
             // 语法错误或访问违规
-            return new BusinessException(ErrorCode.DATABASE_ERROR, "SQL语法错误", e);
+            return new BusinessException(ErrorCode.DATABASE_ERROR.getCode(), "SQL语法错误", e);
         }
         
         if ("08000".equals(sqlState) || "08001".equals(sqlState) || "08004".equals(sqlState)) {
             // 连接异常
-            return new BusinessException(ErrorCode.DATABASE_ERROR, "数据库连接异常", e);
+            return new BusinessException(ErrorCode.DATABASE_ERROR.getCode(), "数据库连接异常", e);
         }
         
-        return new BusinessException(ErrorCode.DATABASE_ERROR, 
+        return new BusinessException(ErrorCode.DATABASE_ERROR.getCode(), 
             String.format("SQL异常 - 操作: %s, 错误码: %d, 状态: %s", operationName, errorCode, sqlState), e);
     }
 
@@ -209,13 +209,13 @@ public class ErrorHandlingUtil {
      */
     public static void validateBusinessCondition(boolean condition, ErrorCode errorCode) {
         if (!condition) {
-            throw new BusinessException(errorCode);
+            throw new BusinessException(errorCode.getCode());
         }
     }
 
     public static void validateBusinessCondition(boolean condition, ErrorCode errorCode, String message) {
         if (!condition) {
-            throw new BusinessException(errorCode, message);
+            throw new BusinessException(errorCode.getCode(), message);
         }
     }
 
@@ -225,7 +225,7 @@ public class ErrorHandlingUtil {
     public static void throwBusinessException(ErrorCode errorCode, String message, Object... args) {
         String formattedMessage = String.format(message, args);
         log.error("业务异常 - 错误码: {}, 消息: {}", errorCode.getCode(), formattedMessage);
-        throw new BusinessException(errorCode, formattedMessage);
+        throw new BusinessException(errorCode.getCode(), formattedMessage);
     }
 
     /**
@@ -257,7 +257,7 @@ public class ErrorHandlingUtil {
          */
         public static void validateNotSelf(String userId, String targetUserId) {
             if (userId.equals(targetUserId)) {
-                throw new BusinessException(ErrorCode.CANNOT_ATTENTION_SELF);
+                throw new BusinessException(ErrorCode.CANNOT_ATTENTION_SELF.getCode());
             }
         }
 
@@ -266,7 +266,7 @@ public class ErrorHandlingUtil {
          */
         public static void validateAttentionLimit(int currentCount, int maxLimit) {
             if (currentCount >= maxLimit) {
-                throw new BusinessException(ErrorCode.ATTENTION_LIMIT_EXCEEDED, 
+                throw new BusinessException(ErrorCode.ATTENTION_LIMIT_EXCEEDED.getCode(), 
                     String.format("特别关心数量不能超过 %d 个", maxLimit));
             }
         }
@@ -276,7 +276,7 @@ public class ErrorHandlingUtil {
          */
         public static void validateBatchSize(int batchSize, int maxSize) {
             if (batchSize > maxSize) {
-                throw new BusinessException(ErrorCode.BATCH_SIZE_EXCEEDED, 
+                throw new BusinessException(ErrorCode.BATCH_SIZE_EXCEEDED.getCode(), 
                     String.format("批量操作数量不能超过 %d 个", maxSize));
             }
         }
