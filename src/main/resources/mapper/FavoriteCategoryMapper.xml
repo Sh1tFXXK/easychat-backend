@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.easychat.Mapper.FavoriteCategoryMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="org.example.easychat.Entity.FavoriteCategory">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="user_id" property="userId" jdbcType="BIGINT"/>
+        <result column="name" property="name" jdbcType="VARCHAR"/>
+        <result column="icon" property="icon" jdbcType="VARCHAR"/>
+        <result column="color" property="color" jdbcType="VARCHAR"/>
+        <result column="description" property="description" jdbcType="VARCHAR"/>
+        <result column="sort_order" property="sortOrder" jdbcType="INTEGER"/>
+        <result column="item_count" property="itemCount" jdbcType="INTEGER"/>
+        <result column="create_time" property="createTime" jdbcType="TIMESTAMP"/>
+        <result column="update_time" property="updateTime" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <!-- 基础字段 -->
+    <sql id="Base_Column_List">
+        id, user_id, name, icon, color, description, sort_order, item_count, create_time, update_time
+    </sql>
+
+    <!-- 根据用户ID查询分类列表 -->
+    <select id="selectByUserId" resultMap="BaseResultMap">
+        SELECT 
+            <include refid="Base_Column_List"/>
+        FROM favorite_categories
+        WHERE user_id = #{userId}
+        ORDER BY sort_order ASC, create_time ASC
+    </select>
+
+    <!-- 检查分类名称是否存在 -->
+    <select id="checkNameExists" resultType="int">
+        SELECT COUNT(1) 
+        FROM favorite_categories 
+        WHERE user_id = #{userId} 
+        AND name = #{name}
+    </select>
+
+    <!-- 统计用户分类数量 -->
+    <select id="countByUserId" resultType="int">
+        SELECT COUNT(1) 
+        FROM favorite_categories 
+        WHERE user_id = #{userId}
+    </select>
+
+    <!-- 更新分类的收藏数量 -->
+    <update id="updateItemCount">
+        UPDATE favorite_categories 
+        SET item_count = (
+            SELECT COUNT(1) 
+            FROM favorites 
+            WHERE category_id = #{categoryId} 
+            AND is_available = 1
+        ),
+        update_time = NOW()
+        WHERE id = #{categoryId}
+    </update>
+
+    <!-- 批量更新分类的收藏数量 -->
+    <update id="batchUpdateItemCount">
+        UPDATE favorite_categories 
+        SET item_count = (
+            SELECT COUNT(1) 
+            FROM favorites 
+            WHERE category_id = favorite_categories.id 
+            AND is_available = 1
+        ),
+        update_time = NOW()
+        WHERE user_id = #{userId}
+    </update>
+
+    <!-- 获取分类使用统计 -->
+    <select id="getCategoryUsageStats" resultType="map">
+        SELECT 
+            c.id,
+            c.name,
+            c.icon,
+            c.color,
+            c.item_count,
+            COALESCE(recent.recent_count, 0) as recent_count,
+            c.create_time
+        FROM favorite_categories c
+        LEFT JOIN (
+            SELECT 
+                category_id,
+                COUNT(1) as recent_count
+            FROM favorites 
+            WHERE user_id = #{userId}
+            AND is_available = 1
+            AND create_time >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            GROUP BY category_id
+        ) recent ON c.id = recent.category_id
+        WHERE c.user_id = #{userId}
+        ORDER BY c.sort_order ASC, c.create_time ASC
+    </select>
+
+    <!-- 获取最常用的分类 -->
+    <select id="getMostUsedCategories" resultMap="BaseResultMap">
+        SELECT 
+            <include refid="Base_Column_List"/>
+        FROM favorite_categories
+        WHERE user_id = #{userId}
+        AND item_count > 0
+        ORDER BY item_count DESC, update_time DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 更新分类排序 -->
+    <update id="updateSortOrder">
+        UPDATE favorite_categories 
+        SET sort_order = #{sortOrder}, update_time = NOW()
+        WHERE id = #{id} AND user_id = #{userId}
+    </update>
+
+    <!-- 批量更新分类排序 -->
+    <update id="batchUpdateSortOrder">
+        <foreach collection="categories" item="category" separator=";">
+            UPDATE favorite_categories 
+            SET sort_order = #{category.sortOrder}, update_time = NOW()
+            WHERE id = #{category.id} AND user_id = #{userId}
+        </foreach>
+    </update>
+
+    <!-- 获取下一个排序号 -->
+    <select id="getNextSortOrder" resultType="int">
+        SELECT COALESCE(MAX(sort_order), 0) + 1
+        FROM favorite_categories 
+        WHERE user_id = #{userId}
+    </select>
+
+    <!-- 根据名称模糊查询分类 -->
+    <select id="searchByName" resultMap="BaseResultMap">
+        SELECT 
+            <include refid="Base_Column_List"/>
+        FROM favorite_categories
+        WHERE user_id = #{userId}
+        AND name LIKE CONCAT('%', #{keyword}, '%')
+        ORDER BY sort_order ASC, create_time ASC
+    </select>
+
+    <!-- 获取空分类（没有收藏项的分类） -->
+    <select id="getEmptyCategories" resultMap="BaseResultMap">
+        SELECT 
+            <include refid="Base_Column_List"/>
+        FROM favorite_categories
+        WHERE user_id = #{userId}
+        AND item_count = 0
+        ORDER BY create_time DESC
+    </select>
+
+    <!-- 删除空分类 -->
+    <delete id="deleteEmptyCategories">
+        DELETE FROM favorite_categories 
+        WHERE user_id = #{userId} 
+        AND item_count = 0
+    </delete>
+
+    <!-- 获取分类创建时间统计 -->
+    <select id="getCategoryCreationStats" resultType="map">
+        SELECT 
+            DATE(create_time) as date,
+            COUNT(1) as count
+        FROM favorite_categories 
+        WHERE user_id = #{userId}
+        <if test="days != null">
+            AND create_time >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
+        </if>
+        GROUP BY DATE(create_time)
+        ORDER BY date DESC
+    </select>
+
+</mapper>

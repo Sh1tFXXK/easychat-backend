@@ -1,11 +1,12 @@
-package org.example.easychat.dto;
+package org.example.easychat.event;
 
 import lombok.Data;
 
 @Data
-public class AttentionUserOnlineEvent {
+public class AttentionUserOfflineEvent {
     private String userId;
     private String userName;
     private String avatar;
+    private String lastActiveTime;
     private String timestamp;
 }

@@ -1,100 +1,74 @@
 package org.example.easychat.service;
 
-import org.example.easychat.Entity.Favorite;
-import org.example.easychat.Entity.FavoriteCategory;
-import org.example.easychat.Entity.PageResult;
-import org.example.easychat.dto.favoriteDto;
-import org.example.easychat.Entity.itemType;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import org.example.easychat.VO.*;
+import org.example.easychat.dto.*;
 
 import java.util.List;
-import java.util.Map;
 
+/**
+ * 收藏服务接口
+ */
 public interface FavoriteInterface {
     
     /**
      * 添加收藏
      */
-    Favorite addFavorite(String userId, favoriteDto favoriteDto);
-    
-    /**
-     * 获取收藏列表
-     */
-    PageResult<Favorite> getFavoritesList(String userId, Long categoryId, itemType itemType, 
-                                         String keyword, Boolean specialCareOnly, 
-                                         String sort, String order, int page, int pageSize);
-    
-    /**
-     * 根据ID获取收藏
-     */
-    Favorite getFavoriteById(Long id, String userId);
-    
-    /**
-     * 更新收藏
-     */
-    boolean updateFavorite(Long id, String userId, favoriteDto favoriteDto);
+    FavoriteVO addFavorite(FavoriteDto favoriteDto, Long userId);
     
     /**
      * 删除收藏
      */
-    boolean deleteFavorite(Long id, String userId);
+    void deleteFavorite(Long id, Long userId);
     
     /**
      * 批量删除收藏
      */
-    boolean batchDeleteFavorites(String userId, List<Long> ids);
+    void batchDeleteFavorites(List<Long> ids, Long userId);
     
     /**
-     * 设置特别关心
+     * 更新收藏
      */
-    boolean setSpecialCare(Long id, String userId, String priority, String notes);
+    FavoriteVO updateFavorite(Long id, FavoriteDto favoriteDto, Long userId);
     
     /**
-     * 取消特别关心
+     * 获取收藏详情
      */
-    boolean removeSpecialCare(Long id, String userId);
+    FavoriteVO getFavoriteById(Long id, Long userId);
     
     /**
-     * 获取特别关心列表
+     * 获取收藏列表
      */
-    PageResult<Favorite> getSpecialCareList(String userId, String priority, int page, int pageSize);
+    IPage<FavoriteVO> getFavoriteList(FavoriteSearchDto searchDto);
     
     /**
-     * 获取收藏统计信息
+     * 高级搜索收藏
      */
-    Map<String, Object> getFavoriteStats(String userId);
+    IPage<FavoriteVO> advancedSearch(FavoriteSearchDto searchDto);
     
     /**
-     * 搜索收藏
+     * 批量更新收藏分类
      */
-    PageResult<Favorite> searchFavorites(String userId, String keyword, List<itemType> itemTypes, 
-                                        List<Long> categoryIds, List<String> tags, 
-                                        String startDate, String endDate, 
-                                        Boolean specialCareOnly, int page, int pageSize);
-    
-    // 分类相关方法
+    void batchUpdateCategory(BatchOperationDto batchDto, Long userId);
     
     /**
-     * 创建分类
+     * 批量添加标签
      */
-    FavoriteCategory createCategory(String userId, String name, String color, String icon, String description);
+    void batchAddTags(BatchOperationDto batchDto, Long userId);
     
     /**
-     * 获取用户分类列表
+     * 批量移除标签
      */
-    List<FavoriteCategory> getCategoriesByUserId(String userId);
+    void batchRemoveTags(BatchOperationDto batchDto, Long userId);
     
     /**
-     * 更新分类
+     * 获取收藏统计
      */
-    boolean updateCategory(Long id, String userId, String name, String color, String icon, String description);
+    FavoriteStatisticsVO getStatistics(Long userId);
     
     /**
-     * 删除分类
+     * 检查收藏是否重复
      */
-    boolean deleteCategory(Long id, String userId);
-    
-    /**
-     * 分类排序
-     */
-    boolean sortCategories(String userId, List<FavoriteCategory> categories);
+    boolean checkDuplicate(String itemType, String content, Long userId);
 }
+

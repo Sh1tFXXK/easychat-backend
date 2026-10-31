@@ -2,6 +2,7 @@ package org.example.easychat.Handler;
 
 import lombok.extern.slf4j.Slf4j;
 import org.example.easychat.BO.ApiResponseBO;
+import org.example.easychat.Exception.BusinessException;
 import org.example.easychat.service.ErrorMonitorService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;

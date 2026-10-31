@@ -1,4 +1,4 @@
-package org.example.easychat.dto;
+package org.example.easychat.event;
 
 import lombok.Data;
 

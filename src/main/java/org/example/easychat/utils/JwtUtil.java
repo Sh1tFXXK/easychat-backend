@@ -41,19 +41,9 @@ public class JwtUtil {
      */
     public String generateToken(String userId) {
         Map<String, Object> claims = new HashMap<>();
-        return createToken(claims, userId);
-    }
-
-    /**
-     * 创建 token
-     * @param claims
-     * @param subject
-     * @return
-     */
-    private String createToken(Map<String, Object> claims, String subject) {
         return Jwts.builder()
                 .setClaims(claims)
-                .setSubject(subject)
+                .setSubject(userId)
                 .setIssuedAt(new Date(System.currentTimeMillis()))
                 .setExpiration(new Date(System.currentTimeMillis() + jwtExpirationMs))
                 .signWith(secretKey)

@@ -1,6 +1,9 @@
-package org.example.easychat.event;
+package org.example.easychat.listener;
 
 import lombok.extern.slf4j.Slf4j;
+import org.example.easychat.dto.attentionUpdateEvent;
+import org.example.easychat.dto.userStatusChangeEvent;
+import org.example.easychat.event.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
@@ -28,7 +31,7 @@ public class AttentionEventListener {
                     event.getUserId(), event.getOldStatus(), event.getNewStatus());
             
             // 通过Socket.IO广播状态变化
-            org.example.easychat.dto.UserStatusChangeEvent statusChangeEvent = new org.example.easychat.dto.UserStatusChangeEvent();
+            userStatusChangeEvent statusChangeEvent = new userStatusChangeEvent();
             statusChangeEvent.setUserId(event.getUserId());
             statusChangeEvent.setStatus(event.getNewStatus());
             statusChangeEvent.setPreviousStatus(event.getOldStatus());
@@ -52,7 +55,7 @@ public class AttentionEventListener {
                     event.getUserId(), event.getTargetUserId(), event.getOperation());
             
             // 通过Socket.IO发送特别关心更新事件
-            org.example.easychat.dto.AttentionUpdateEvent updateEvent = new org.example.easychat.dto.AttentionUpdateEvent();
+            attentionUpdateEvent updateEvent = new attentionUpdateEvent();
             updateEvent.setUserId(event.getUserId());
             updateEvent.setTargetUserId(event.getTargetUserId());
             updateEvent.setEventType(event.getOperation());
@@ -76,7 +79,7 @@ public class AttentionEventListener {
             log.debug("处理用户上线事件: userId={}", event.getUserId());
             
             // 通过Socket.IO广播用户上线事件
-            org.example.easychat.dto.AttentionUserOnlineEvent onlineEvent = new org.example.easychat.dto.AttentionUserOnlineEvent();
+            AttentionUserOnlineEvent onlineEvent = new AttentionUserOnlineEvent();
             onlineEvent.setUserId(event.getUserId());
             onlineEvent.setTimestamp(String.valueOf(System.currentTimeMillis()));
             
@@ -97,7 +100,7 @@ public class AttentionEventListener {
             log.debug("处理用户离线事件: userId={}", event.getUserId());
             
             // 通过Socket.IO广播用户离线事件
-            org.example.easychat.dto.AttentionUserOfflineEvent offlineEvent = new org.example.easychat.dto.AttentionUserOfflineEvent();
+            AttentionUserOfflineEvent offlineEvent = new AttentionUserOfflineEvent();
             offlineEvent.setUserId(event.getUserId());
             offlineEvent.setTimestamp(String.valueOf(System.currentTimeMillis()));
             

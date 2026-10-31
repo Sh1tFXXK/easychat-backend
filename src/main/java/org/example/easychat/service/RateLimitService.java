@@ -2,8 +2,8 @@ package org.example.easychat.service;
 
 import lombok.extern.slf4j.Slf4j;
 import org.example.easychat.Config.RateLimitConfig;
-import org.example.easychat.Handler.ErrorCode;
-import org.example.easychat.Handler.BusinessException;
+import org.example.easychat.Entity.ErrorCode;
+import org.example.easychat.Exception.BusinessException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -31,7 +31,7 @@ public class RateLimitService {
         );
         
         if (remaining < 0) {
-            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED,
+            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED.getCode(),
                 "添加特别关心操作过于频繁，请稍后再试");
         }
         
@@ -52,7 +52,7 @@ public class RateLimitService {
         );
         
         if (remaining < 0) {
-            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED, 
+            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED.getCode(), 
                 "删除特别关心操作过于频繁，请稍后再试");
         }
         
@@ -73,7 +73,7 @@ public class RateLimitService {
         );
         
         if (remaining < 0) {
-            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED, 
+            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED.getCode(), 
                 "更新特别关心设置过于频繁，请稍后再试");
         }
         
@@ -94,7 +94,7 @@ public class RateLimitService {
         );
         
         if (remaining < 0) {
-            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED, 
+            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED.getCode(), 
                 "批量操作过于频繁，请稍后再试");
         }
         
@@ -115,7 +115,7 @@ public class RateLimitService {
         );
         
         if (remaining < 0) {
-            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED, 
+            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED.getCode(), 
                 "查询操作过于频繁，请稍后再试");
         }
         
@@ -135,7 +135,7 @@ public class RateLimitService {
         );
         
         if (remaining < 0) {
-            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED, 
+            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED.getCode(), 
                 "Socket事件发送过于频繁，请稍后再试");
         }
         
@@ -154,7 +154,7 @@ public class RateLimitService {
         
         if (remaining < 0) {
             log.warn("IP限流触发: ip={}, operation={}", ip, operation);
-            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED, 
+            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED.getCode(), 
                 "请求过于频繁，请稍后再试");
         }
         

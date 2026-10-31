@@ -6,7 +6,7 @@ import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.Pattern;
 
 @Data
-public class UserStatusChangeEvent {
+public class userStatusChangeEvent {
     @NotBlank(message = "用户ID不能为空")
     private String userId;
     

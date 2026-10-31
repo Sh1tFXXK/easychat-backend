@@ -5,10 +5,11 @@ import org.example.easychat.Entity.AttentionNotification;
 import org.example.easychat.Entity.User;
 import org.example.easychat.Mapper.AttentionNotificationMapper;
 import org.example.easychat.Mapper.UserMapper;
-import org.example.easychat.dto.AttentionUpdateEvent;
-import org.example.easychat.dto.AttentionUserOnlineEvent;
+import org.example.easychat.dto.attentionUpdateEvent;
+import org.example.easychat.event.AttentionUserOnlineEvent;
 import org.example.easychat.dto.NotificationMessage;
 import org.example.easychat.dto.NotificationPriority;
+import org.example.easychat.Handler.AttentionEventPublisher;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -46,7 +47,7 @@ public class NotificationService {
     private RabbitTemplate rabbitTemplate;
     
     @Autowired
-    private org.example.easychat.event.AttentionEventPublisher eventPublisher;
+    private AttentionEventPublisher eventPublisher;
     
     // 队列名称常量
     private static final String NOTIFICATION_QUEUE = "attention.notification.queue";
@@ -80,7 +81,7 @@ public class NotificationService {
             eventPublisher.publishAttentionUpdateEvent(userId, targetUserId, operation);
             
             // 同时发送到消息队列进行异步处理
-            org.example.easychat.dto.AttentionUpdateEvent event = new org.example.easychat.dto.AttentionUpdateEvent();
+            attentionUpdateEvent event = new attentionUpdateEvent();
             event.setUserId(userId);
             event.setTargetUserId(targetUserId);
             event.setEventType(operation);
@@ -694,7 +695,7 @@ public class NotificationService {
      * 创建特别关心更新事件数据
      */
     private Object createAttentionUpdateEventData(String userId, String targetUserId, String operation) {
-        AttentionUpdateEvent event = new AttentionUpdateEvent();
+        attentionUpdateEvent event = new attentionUpdateEvent();
         event.setUserId(userId);
         event.setTargetUserId(targetUserId);
         event.setEventType(operation);

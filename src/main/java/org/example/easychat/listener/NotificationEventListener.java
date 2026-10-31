@@ -1,9 +1,10 @@
-package org.example.easychat.event;
+package org.example.easychat.listener;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.example.easychat.Entity.SpecialAttention;
 import org.example.easychat.Mapper.SpecialAttentionMapper;
+import org.example.easychat.event.UserStatusChangeEvent;
 import org.example.easychat.service.NotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;

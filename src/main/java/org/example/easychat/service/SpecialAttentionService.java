@@ -11,8 +11,9 @@ import org.example.easychat.VO.AttentionUpdatesResult;
 import org.example.easychat.VO.BatchOperationResult;
 import org.example.easychat.VO.SpecialAttentionVO;
 import org.example.easychat.dto.*;
-import org.example.easychat.Handler.BusinessException;
-import org.example.easychat.Handler.ErrorCode;
+import org.example.easychat.Exception.BusinessException;
+import org.example.easychat.Entity.ErrorCode;
+import org.example.easychat.Handler.AttentionEventPublisher;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -44,7 +45,7 @@ public class SpecialAttentionService implements SpecialAttentionInterface {
     private RedisTemplate<String, Object> redisTemplate;
     
     @Autowired
-    private org.example.easychat.event.AttentionEventPublisher eventPublisher;
+    private AttentionEventPublisher eventPublisher;
     
     @Autowired(required = false)
     private CacheService cacheService;
@@ -110,7 +111,7 @@ public class SpecialAttentionService implements SpecialAttentionInterface {
                 performanceMonitorService.recordErrorCount("getAttentionList", "SystemError");
             }
             log.error("获取特别关心列表失败: userId={}", queryDTO.getUserId(), e);
-            throw new BusinessException(ErrorCode.DATABASE_ERROR, "获取特别关心列表失败");
+            throw new BusinessException(ErrorCode.DATABASE_ERROR.getCode(), "获取特别关心列表失败");
         }
     }
 
@@ -129,7 +130,7 @@ public class SpecialAttentionService implements SpecialAttentionInterface {
             log.info("检查特别关心关系是否已存在: userId={}, targetUserId={}", addDTO.getUserId(), addDTO.getTargetUserId());
             if (attentionMapper.existsAttention(addDTO.getUserId(), addDTO.getTargetUserId())) {
                 log.warn("特别关心关系已存在: userId={}, targetUserId={}", addDTO.getUserId(), addDTO.getTargetUserId());
-                throw new BusinessException(ErrorCode.ATTENTION_ALREADY_EXISTS);
+                throw new BusinessException(ErrorCode.ATTENTION_ALREADY_EXISTS.getCode(), ErrorCode.ATTENTION_ALREADY_EXISTS.getMessage());
             }
 
             // 检查特别关心数量限制
@@ -140,7 +141,7 @@ public class SpecialAttentionService implements SpecialAttentionInterface {
             log.info("当前特别关心数量: userId={}, count={}", addDTO.getUserId(), currentCount);
             if (currentCount >= MAX_ATTENTION_COUNT) {
                 log.warn("特别关心数量已达上限: userId={}, count={}", addDTO.getUserId(), currentCount);
-                throw new BusinessException(ErrorCode.ATTENTION_LIMIT_EXCEEDED);
+                throw new BusinessException(ErrorCode.ATTENTION_LIMIT_EXCEEDED.getCode(), ErrorCode.ATTENTION_LIMIT_EXCEEDED.getMessage());
             }
 
             // 创建特别关心记录
@@ -185,7 +186,7 @@ public class SpecialAttentionService implements SpecialAttentionInterface {
         } catch (Exception e) {
             log.error("添加特别关心系统异常: userId={}, targetUserId={}", 
                      addDTO.getUserId(), addDTO.getTargetUserId(), e);
-            throw new BusinessException(ErrorCode.DATABASE_ERROR, "添加特别关心失败");
+            throw new BusinessException(ErrorCode.DATABASE_ERROR.getCode(), "添加特别关心失败");
         }
     }
 
@@ -210,7 +211,7 @@ public class SpecialAttentionService implements SpecialAttentionInterface {
 
             int deleted = attentionMapper.delete(wrapper);
             if (deleted == 0) {
-                throw new BusinessException(ErrorCode.ATTENTION_NOT_FOUND);
+                throw new BusinessException(ErrorCode.ATTENTION_NOT_FOUND.getCode(), ErrorCode.ATTENTION_NOT_FOUND.getMessage());
             }
 
             // 清除缓存
@@ -229,7 +230,7 @@ public class SpecialAttentionService implements SpecialAttentionInterface {
             throw e;
         } catch (Exception e) {
             log.error("删除特别关心失败: userId={}, targetUserId={}", removeDTO.getUserId(), removeDTO.getTargetUserId(), e);
-            throw new BusinessException(ErrorCode.DATABASE_ERROR, "删除特别关心失败");
+            throw new BusinessException(ErrorCode.DATABASE_ERROR.getCode(), "删除特别关心失败");
         }
     }
 
@@ -258,7 +259,7 @@ public class SpecialAttentionService implements SpecialAttentionInterface {
 
             int updated = attentionMapper.updateById(attention);
             if (updated == 0) {
-                throw new BusinessException(ErrorCode.ATTENTION_NOT_FOUND);
+                throw new BusinessException(ErrorCode.ATTENTION_NOT_FOUND.getCode(), ErrorCode.ATTENTION_NOT_FOUND.getMessage());
             }
 
             // 清除缓存
@@ -270,7 +271,7 @@ public class SpecialAttentionService implements SpecialAttentionInterface {
             throw e;
         } catch (Exception e) {
             log.error("更新通知设置失败: id={}, userId={}", updateDTO.getId(), updateDTO.getUserId(), e);
-            throw new BusinessException(ErrorCode.DATABASE_ERROR, "更新通知设置失败");
+            throw new BusinessException(ErrorCode.DATABASE_ERROR.getCode(), "更新通知设置失败");
         }
     }
 
@@ -333,10 +334,10 @@ public class SpecialAttentionService implements SpecialAttentionInterface {
     public AttentionCheckResult checkAttentionStatus(String userId, String targetUserId) {
         // 参数验证
         if (StringUtils.isBlank(userId)) {
-            throw new BusinessException(ErrorCode.INVALID_PARAMS, "用户ID不能为空");
+            throw new BusinessException(ErrorCode.INVALID_PARAMS.getCode(), "用户ID不能为空");
         }
         if (StringUtils.isBlank(targetUserId)) {
-            throw new BusinessException(ErrorCode.INVALID_PARAMS, "目标用户ID不能为空");
+            throw new BusinessException(ErrorCode.INVALID_PARAMS.getCode(), "目标用户ID不能为空");
         }
 
         try {
@@ -361,7 +362,7 @@ public class SpecialAttentionService implements SpecialAttentionInterface {
 
         } catch (Exception e) {
             log.error("检查特别关心状态失败: userId={}, targetUserId={}", userId, targetUserId, e);
-            throw new BusinessException(ErrorCode.DATABASE_ERROR, "检查特别关心状态失败");
+            throw new BusinessException(ErrorCode.DATABASE_ERROR.getCode(), "检查特别关心状态失败");
         }
     }
 
@@ -372,7 +373,7 @@ public class SpecialAttentionService implements SpecialAttentionInterface {
     public AttentionUpdatesResult getAttentionUpdates(AttentionUpdatesDTO updatesDTO) {
         // 参数验证
         if (StringUtils.isBlank(updatesDTO.getUserId())) {
-            throw new BusinessException(ErrorCode.INVALID_PARAMS, "用户ID不能为空");
+            throw new BusinessException(ErrorCode.INVALID_PARAMS.getCode(), "用户ID不能为空");
         }
 
         try {
@@ -417,7 +418,7 @@ public class SpecialAttentionService implements SpecialAttentionInterface {
 
         } catch (Exception e) {
             log.error("获取特别关心更新失败: userId={}", updatesDTO.getUserId(), e);
-            throw new BusinessException(ErrorCode.DATABASE_ERROR, "获取特别关心更新失败");
+            throw new BusinessException(ErrorCode.DATABASE_ERROR.getCode(), "获取特别关心更新失败");
         }
     }
 
@@ -472,7 +473,7 @@ public class SpecialAttentionService implements SpecialAttentionInterface {
      */
     private void validateQueryParams(AttentionQueryDTO queryDTO) {
         if (StringUtils.isBlank(queryDTO.getUserId())) {
-            throw new BusinessException(ErrorCode.INVALID_PARAMS, "用户ID不能为空");
+            throw new BusinessException(ErrorCode.INVALID_PARAMS.getCode(), "用户ID不能为空");
         }
         if (queryDTO.getPage() < 1) {
             queryDTO.setPage(1);
@@ -487,19 +488,19 @@ public class SpecialAttentionService implements SpecialAttentionInterface {
      */
     private void validateAddParams(AttentionAddDTO addDTO) {
         if (StringUtils.isBlank(addDTO.getUserId())) {
-            throw new BusinessException(ErrorCode.INVALID_PARAMS, "用户ID不能为空");
+            throw new BusinessException(ErrorCode.INVALID_PARAMS.getCode(), "用户ID不能为空");
         }
         if (StringUtils.isBlank(addDTO.getTargetUserId())) {
-            throw new BusinessException(ErrorCode.INVALID_PARAMS, "目标用户ID不能为空");
+            throw new BusinessException(ErrorCode.INVALID_PARAMS.getCode(), "目标用户ID不能为空");
         }
         if (addDTO.getUserId().equals(addDTO.getTargetUserId())) {
-            throw new BusinessException(ErrorCode.CANNOT_ATTENTION_SELF);
+            throw new BusinessException(ErrorCode.CANNOT_ATTENTION_SELF.getCode(), ErrorCode.CANNOT_ATTENTION_SELF.getMessage());
         }
 
         // 检查目标用户是否存在
         User targetUser = userMapper.selectById(addDTO.getTargetUserId());
         if (targetUser == null) {
-            throw new BusinessException(ErrorCode.TARGET_USER_NOT_FOUND);
+            throw new BusinessException(ErrorCode.TARGET_USER_NOT_FOUND.getCode(), ErrorCode.TARGET_USER_NOT_FOUND.getMessage());
         }
     }
 
@@ -508,10 +509,10 @@ public class SpecialAttentionService implements SpecialAttentionInterface {
      */
     private void validateRemoveParams(AttentionRemoveDTO removeDTO) {
         if (StringUtils.isBlank(removeDTO.getUserId())) {
-            throw new BusinessException(ErrorCode.INVALID_PARAMS, "用户ID不能为空");
+            throw new BusinessException(ErrorCode.INVALID_PARAMS.getCode(), "用户ID不能为空");
         }
         if (removeDTO.getId() == null && StringUtils.isBlank(removeDTO.getTargetUserId())) {
-            throw new BusinessException(ErrorCode.INVALID_PARAMS, "必须提供ID或目标用户ID");
+            throw new BusinessException(ErrorCode.INVALID_PARAMS.getCode(), "必须提供ID或目标用户ID");
         }
     }
 
@@ -520,13 +521,13 @@ public class SpecialAttentionService implements SpecialAttentionInterface {
      */
     private void validateUpdateParams(AttentionUpdateDTO updateDTO) {
         if (updateDTO.getId() == null) {
-            throw new BusinessException(ErrorCode.INVALID_PARAMS, "特别关心记录ID不能为空");
+            throw new BusinessException(ErrorCode.INVALID_PARAMS.getCode(), "特别关心记录ID不能为空");
         }
         if (StringUtils.isBlank(updateDTO.getUserId())) {
-            throw new BusinessException(ErrorCode.INVALID_PARAMS, "用户ID不能为空");
+            throw new BusinessException(ErrorCode.INVALID_PARAMS.getCode(), "用户ID不能为空");
         }
         if (updateDTO.getNotificationSettings() == null) {
-            throw new BusinessException(ErrorCode.INVALID_PARAMS, "通知设置不能为空");
+            throw new BusinessException(ErrorCode.INVALID_PARAMS.getCode(), "通知设置不能为空");
         }
     }
 
@@ -535,25 +536,25 @@ public class SpecialAttentionService implements SpecialAttentionInterface {
      */
     private void validateBatchParams(AttentionBatchDTO batchDTO) {
         if (StringUtils.isBlank(batchDTO.getUserId())) {
-            throw new BusinessException(ErrorCode.INVALID_PARAMS, "用户ID不能为空");
+            throw new BusinessException(ErrorCode.INVALID_PARAMS.getCode(), "用户ID不能为空");
         }
         if (batchDTO.getOperationType() == null) {
-            throw new BusinessException(ErrorCode.INVALID_PARAMS, "操作类型不能为空");
+            throw new BusinessException(ErrorCode.INVALID_PARAMS.getCode(), "操作类型不能为空");
         }
         if (batchDTO.getOperationType() != AttentionBatchDTO.BatchOperationType.ADD && 
             batchDTO.getOperationType() != AttentionBatchDTO.BatchOperationType.REMOVE) {
-            throw new BusinessException(ErrorCode.INVALID_PARAMS, "操作类型必须是ADD或REMOVE");
+            throw new BusinessException(ErrorCode.INVALID_PARAMS.getCode(), "操作类型必须是ADD或REMOVE");
         }
         if (batchDTO.getTargetUserIds() == null || batchDTO.getTargetUserIds().isEmpty()) {
-            throw new BusinessException(ErrorCode.INVALID_PARAMS, "目标用户ID列表不能为空");
+            throw new BusinessException(ErrorCode.INVALID_PARAMS.getCode(), "目标用户ID列表不能为空");
         }
         if (batchDTO.getTargetUserIds().size() > 50) {
-            throw new BusinessException(ErrorCode.INVALID_PARAMS, "批量操作数量不能超过50个");
+            throw new BusinessException(ErrorCode.INVALID_PARAMS.getCode(), "批量操作数量不能超过50个");
         }
 
         // 检查是否包含自己
         if (batchDTO.getTargetUserIds().contains(batchDTO.getUserId())) {
-            throw new BusinessException(ErrorCode.CANNOT_ATTENTION_SELF);
+            throw new BusinessException(ErrorCode.CANNOT_ATTENTION_SELF.getCode(), ErrorCode.CANNOT_ATTENTION_SELF.getMessage());
         }
     }
 
@@ -564,7 +565,7 @@ public class SpecialAttentionService implements SpecialAttentionInterface {
     public org.example.easychat.VO.AttentionStatistics getAttentionStatistics(String userId) {
         // 参数验证
         if (StringUtils.isBlank(userId)) {
-            throw new BusinessException(ErrorCode.INVALID_PARAMS, "用户ID不能为空");
+            throw new BusinessException(ErrorCode.INVALID_PARAMS.getCode(), "用户ID不能为空");
         }
 
         try {
@@ -583,7 +584,7 @@ public class SpecialAttentionService implements SpecialAttentionInterface {
 
         } catch (Exception e) {
             log.error("获取特别关心统计信息失败: userId={}", userId, e);
-            throw new BusinessException(ErrorCode.DATABASE_ERROR, "获取特别关心统计信息失败");
+            throw new BusinessException(ErrorCode.DATABASE_ERROR.getCode(), "获取特别关心统计信息失败");
         }
     }
 

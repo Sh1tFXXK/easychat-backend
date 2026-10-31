@@ -1,14 +1,13 @@
 package org.example.easychat.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.example.easychat.Handler.ErrorCode;
-import org.example.easychat.Entity.SpecialAttention;
+import org.example.easychat.Entity.ErrorCode;
 import org.example.easychat.Entity.UserStatus;
-import org.example.easychat.Handler.BusinessException;
+import org.example.easychat.Exception.BusinessException;
 import org.example.easychat.Mapper.SpecialAttentionMapper;
 import org.example.easychat.Mapper.UserStatusMapper;
+import org.example.easychat.Handler.AttentionEventPublisher;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
@@ -16,7 +15,6 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -30,7 +28,7 @@ public class UserStatusService {
     private SpecialAttentionMapper attentionMapper;
     
     @Autowired
-    private org.example.easychat.event.AttentionEventPublisher eventPublisher;
+    private AttentionEventPublisher eventPublisher;
     
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
@@ -122,13 +120,13 @@ public class UserStatusService {
     public void updateUserStatus(String userId, String status) {
         // 参数验证
         if (StringUtils.isBlank(userId)) {
-            throw new BusinessException(ErrorCode.INVALID_PARAMS, "用户ID不能为空");
+            throw new BusinessException(ErrorCode.INVALID_PARAMS.getCode(), "用户ID不能为空");
         }
         if (StringUtils.isBlank(status)) {
-            throw new BusinessException(ErrorCode.INVALID_PARAMS, "用户状态不能为空");
+            throw new BusinessException(ErrorCode.INVALID_PARAMS.getCode(), "用户状态不能为空");
         }
         if (!isValidStatus(status)) {
-            throw new BusinessException(ErrorCode.INVALID_PARAMS, "无效的用户状态: " + status);
+            throw new BusinessException(ErrorCode.INVALID_PARAMS.getCode(), "无效的用户状态: " + status);
         }
         
         try {
@@ -170,7 +168,7 @@ public class UserStatusService {
             throw e;
         } catch (Exception e) {
             log.error("更新用户状态失败: userId={}, status={}", userId, status, e);
-            throw new BusinessException(ErrorCode.DATABASE_ERROR, "更新用户状态失败");
+            throw new BusinessException(ErrorCode.DATABASE_ERROR.getCode(), "更新用户状态失败");
         }
     }
     
@@ -380,7 +378,7 @@ public class UserStatusService {
             
         } catch (Exception e) {
             log.error("批量更新用户状态失败: userStatusMap={}", userStatusMap, e);
-            throw new BusinessException(ErrorCode.DATABASE_ERROR, "批量更新用户状态失败");
+            throw new BusinessException(ErrorCode.DATABASE_ERROR.getCode(), "批量更新用户状态失败");
         }
     }
     

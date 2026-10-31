@@ -183,3 +183,13 @@ CREATE INDEX idx_favorites_created_desc ON favorites(created_at DESC);
 
 -- 执行完成提示
 SELECT 'Favorites tables created successfully!' as message;
+-- 4. 标签表 (favorite_tags) —— 补：代码实体 FavoriteTag 引用，此前两版脚本均缺失
+CREATE TABLE IF NOT EXISTS favorite_tags (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '标签ID',
+    user_id BIGINT NOT NULL COMMENT '所属用户ID',
+    name VARCHAR(50) NOT NULL COMMENT '标签名',
+    use_count INT NOT NULL DEFAULT 0 COMMENT '使用次数',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除标志'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户收藏标签表';
