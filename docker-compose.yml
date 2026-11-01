@@ -1,0 +1,63 @@
+# 本地基础设施：MySQL + Redis
+#
+# 用法：
+#   docker compose up -d
+#   docker compose ps
+#   docker compose logs -f redis
+#
+# 说明：
+#   - MySQL 只在阶段 3（消息落库）才会真正被 Go 后端使用，现在先把环境备好；
+#   - Redis 是阶段 2 的主力，后端用 REDIS_ADDR=127.0.0.1:6379 连接；
+#   - 数据落在 named volume，`docker compose down -v` 才会清空。
+#
+# 注意：Docker Hub 直连可能被墙，需要给 docker daemon 配代理
+#       （/etc/systemd/system/docker.service.d/http-proxy.conf）。
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: easychat-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: dev123
+      MYSQL_DATABASE: easychat
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      # 首次启动自动建表（只执行一次；改完 DDL 需手动重灌或 down -v）
+      - ./sql/01_core_tables.sql:/docker-entrypoint-initdb.d/01_core_tables.sql:ro
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pdev123"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: easychat-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    # appendonly yes：重启后未读计数/会话不丢。
+    # 如果只做缓存可以关掉 AOF 换性能，但这里还存着登录态，建议开。
+    #
+    # 淘汰策略用 noeviction 而不是 allkeys-lru：
+    # 这里既有缓存（可丢），也有登录态/未读计数（不能静默丢）。
+    # 内存打满时宁可写入报错（能被告警发现），也别把活跃用户的 token 淘汰掉。
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  mysql-data:
+  redis-data:

@@ -1,6 +1,6 @@
-# 路由清单（自动生成 · 共 81 条）
+# 路由清单（自动生成 · 共 89 条）
 
-由 `go run .` 的 GIN-debug 输出生成。阶段 1 全部接口已实现（内存 store）。
+由 `go run .` 的 GIN-debug 输出生成。阶段 1 全部接口 + 阶段 2 Redis 接口（未读/在线状态）。
 
 | 方法 | 路径 | Handler |
 |---|---|---|
@@ -15,9 +15,12 @@
 | POST | `/api/auth/logout` | `AuthHandler.Logout` |
 | GET | `/api/chat/chats` | `ChatHandler.GetChats` |
 | GET | `/api/chat/chats/chatHistory` | `ChatHandler.GetChatHistory` |
+| POST | `/api/chat/chats/read` | `ChatHandler.MarkRead` |
+| POST | `/api/chat/chats/readAll` | `ChatHandler.MarkAllRead` |
 | POST | `/api/chat/chats/saveFileMsg` | `ChatHandler.SaveFileMsg` |
 | POST | `/api/chat/chats/savePictureMsg` | `ChatHandler.SavePictureMsg` |
 | POST | `/api/chat/chats/uploadVoice` | `ChatHandler.UploadVoice` |
+| GET | `/api/chat/unread` | `ChatHandler.GetUnread` |
 | GET | `/api/favorites` | `FavoriteHandler.ListFavorites` |
 | POST | `/api/favorites` | `FavoriteHandler.AddFavorite` |
 | DELETE | `/api/favorites/:id` | `FavoriteHandler.DeleteFavorite` |
@@ -53,6 +56,11 @@
 | GET | `/api/group/users/:userId/groups` | `GroupHandler.GetUserGroups` |
 | GET | `/api/messages` | `MessageHandler.ListMessages` |
 | POST | `/api/messages` | `MessageHandler.CreateMessage` |
+| POST | `/api/presence/heartbeat` | `PresenceHandler.Heartbeat` |
+| POST | `/api/presence/offline` | `PresenceHandler.Offline` |
+| DELETE | `/api/presence/online` | `PresenceHandler.Offline` |
+| GET | `/api/presence/online` | `PresenceHandler.BatchStatus` |
+| GET | `/api/presence/status` | `PresenceHandler.GetStatus` |
 | GET | `/api/user/:id` | `UserHandler.GetUser` |
 | GET | `/api/user/friendVerify` | `UserHandler.GetFriendVerifyList` |
 | GET | `/api/user/friends` | `UserHandler.GetFriendsList` |

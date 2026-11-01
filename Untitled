@@ -1,5 +1,0 @@
-package handler
-
-func (h *FavoriteHandler) AddFavorite ( c *gin.Context) {
-  var req model.
-  }

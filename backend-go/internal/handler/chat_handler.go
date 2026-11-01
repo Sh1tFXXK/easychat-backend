@@ -12,14 +12,22 @@ import (
 
 // ChatHandler handles chat endpoints (send + list messages with cursor pagination).
 type ChatHandler struct {
-	store store.MessageStore
-	convs store.ConversationStore
-	users store.UserStore
+	store  store.MessageStore
+	convs  store.ConversationStore
+	users  store.UserStore
+	unread store.UnreadStore
+	cache  store.ConversationCache
 }
 
 // NewChatHandler creates a ChatHandler with its dependencies.
-func NewChatHandler(s store.MessageStore, convs store.ConversationStore, users store.UserStore) *ChatHandler {
-	return &ChatHandler{store: s, convs: convs, users: users}
+func NewChatHandler(
+	s store.MessageStore,
+	convs store.ConversationStore,
+	users store.UserStore,
+	unread store.UnreadStore,
+	cache store.ConversationCache,
+) *ChatHandler {
+	return &ChatHandler{store: s, convs: convs, users: users, unread: unread, cache: cache}
 }
 
 // SendChat godoc

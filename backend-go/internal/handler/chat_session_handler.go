@@ -14,15 +14,41 @@ import (
 // GetChats GET /api/chat/chats?id=
 //
 // 会话列表（最容易写成 N+1 的地方）：
-//   - 会话本身一次查完（ListByUser）；
+//   - 骨架走缓存（cache:chatlist:<userID>，TTL 60s），发消息时主动失效；
+//   - 缓存里**不存未读数**，每次用 unread:<userID> 这个 hash 实时叠加；
 //   - 每个会话的最后一条消息用 conversations.last_msg_id 定位（MySQL 版是一条 JOIN）；
 //   - 对端用户信息一次性批量取（ListByIDs），不在循环里查。
+//
+// 缓存只放"变化慢"的部分（标题、成员、最后一条消息），
+// 把"每条消息都会变"的未读拆出去 —— 这是缓存粒度设计的核心取舍。
 func (h *ChatHandler) GetChats(c *gin.Context) {
 	userID, ok := requireUser(c)
 	if !ok {
 		return
 	}
 
+	sessions, hit := h.cache.Get(userID)
+	if !hit {
+		sessions = h.buildChatSessions(userID)
+		// 写缓存失败不影响本次响应：缓存是加速层，不是数据源。
+		_ = h.cache.Set(userID, sessions)
+	}
+
+	// 叠加实时未读（缓存里的 Unread 恒为 0）。
+	ids := make([]uint64, 0, len(sessions))
+	for _, s := range sessions {
+		ids = append(ids, s.ConversationID)
+	}
+	unread := h.unread.GetBatch(userID, ids)
+	for i := range sessions {
+		sessions[i].Unread = int(unread[sessions[i].ConversationID])
+	}
+
+	c.JSON(http.StatusOK, response.Success(sessions))
+}
+
+// buildChatSessions 是缓存未命中时的"慢路径"：组装完整会话列表。
+func (h *ChatHandler) buildChatSessions(userID uint64) []model.ChatSession {
 	convs := h.convs.ListByUser(userID)
 
 	// 收集私聊对端 id，批量取用户资料。
@@ -50,8 +76,6 @@ func (h *ChatHandler) GetChats(c *gin.Context) {
 			Title:          conv.Title,
 			LastMessage:    h.store.LastByConversation(conv.ID),
 			UpdatedAt:      conv.UpdatedAt,
-			// Unread 阶段 2 接 Redis 计数器；现在固定 0，别在 MySQL 里 COUNT(*)。
-			Unread: 0,
 		}
 		if conv.Type == model.ConversationTypeDirect {
 			for _, m := range conv.Members {
@@ -71,8 +95,7 @@ func (h *ChatHandler) GetChats(c *gin.Context) {
 		}
 		sessions = append(sessions, s)
 	}
-
-	c.JSON(http.StatusOK, response.Success(sessions))
+	return sessions
 }
 
 // GetChatHistory GET /api/chat/chats/chatHistory?id=&cursor=&limit=
@@ -201,6 +224,7 @@ func (h *ChatHandler) saveMedia(c *gin.Context, msgType int, imagesOnly bool) {
 		return
 	}
 	h.convs.Touch(convID, msg.ID)
+	markMessageSent(h.convs, h.unread, h.cache, convID, userID)
 
 	c.JSON(http.StatusOK, response.Success(msg))
 }

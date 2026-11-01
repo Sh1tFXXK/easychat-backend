@@ -44,3 +44,22 @@ type ChatHistoryQuery struct {
 	Cursor         string `form:"cursor"` // 游标：上一页返回的 next_cursor
 	Limit          int    `form:"limit"`
 }
+
+// UnreadItem 是单个会话的未读数。
+type UnreadItem struct {
+	ConversationID uint64 `json:"conversation_id"`
+	Unread         int    `json:"unread"`
+}
+
+// UnreadSummary 是 GET /api/chat/unread 的返回结构。
+//
+// Total 给 App 角标用（一条汇总数），Items 给会话列表逐条渲染用。
+type UnreadSummary struct {
+	Total int          `json:"total"`
+	Items []UnreadItem `json:"items"`
+}
+
+// MarkReadRequest 是"把某个会话标记为已读"的请求体。
+type MarkReadRequest struct {
+	ConversationID uint64 `json:"conversation_id" binding:"required"`
+}

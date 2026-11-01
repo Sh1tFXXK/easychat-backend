@@ -19,11 +19,20 @@ type GroupHandler struct {
 	convs    store.ConversationStore
 	messages store.MessageStore
 	users    store.UserStore
+	unread   store.UnreadStore
+	cache    store.ConversationCache
 }
 
 // NewGroupHandler 注入依赖。
-func NewGroupHandler(groups store.GroupStore, convs store.ConversationStore, messages store.MessageStore, users store.UserStore) *GroupHandler {
-	return &GroupHandler{groups: groups, convs: convs, messages: messages, users: users}
+func NewGroupHandler(
+	groups store.GroupStore,
+	convs store.ConversationStore,
+	messages store.MessageStore,
+	users store.UserStore,
+	unread store.UnreadStore,
+	cache store.ConversationCache,
+) *GroupHandler {
+	return &GroupHandler{groups: groups, convs: convs, messages: messages, users: users, unread: unread, cache: cache}
 }
 
 // CreateGroup POST /api/group/groups
@@ -116,6 +125,8 @@ func (h *GroupHandler) UpdateGroup(c *gin.Context) {
 		c.JSON(http.StatusNotFound, response.ErrorWithCode("group not found", http.StatusNotFound))
 		return
 	}
+	// 群名/头像/公告变了，成员列表页要立刻看到新标题。
+	invalidateConversationCache(h.convs, h.cache, group.ConversationID)
 	c.JSON(http.StatusOK, response.Success(group))
 }
 
@@ -147,6 +158,8 @@ func (h *GroupHandler) DeleteGroup(c *gin.Context) {
 		c.JSON(http.StatusNotFound, response.ErrorWithCode("group not found", http.StatusNotFound))
 		return
 	}
+	// 解散前先失效成员缓存（删完会话就取不到成员列表了）。
+	invalidateConversationCache(h.convs, h.cache, group.ConversationID)
 	h.convs.Delete(group.ConversationID)
 
 	c.JSON(http.StatusOK, response.SuccessNoData("group deleted"))
@@ -204,6 +217,8 @@ func (h *GroupHandler) InviteMembers(c *gin.Context) {
 	if group, err := h.groups.Get(groupID); err == nil {
 		h.convs.AddMembers(group.ConversationID, req.UserIDs)
 		memberCount = group.MemberCount
+		// 新成员要看到这个群，老成员的成员数也变了。
+		invalidateConversationCache(h.convs, h.cache, group.ConversationID)
 	}
 
 	c.JSON(http.StatusOK, response.Success(gin.H{"added": added, "member_count": memberCount}))
@@ -247,6 +262,9 @@ func (h *GroupHandler) RemoveMember(c *gin.Context) {
 	h.groups.RemoveMember(groupID, targetID)
 	if group, err := h.groups.Get(groupID); err == nil {
 		h.convs.RemoveMember(group.ConversationID, targetID)
+		// 剩下的人要更新成员数；被移除的人缓存里还留着这个群，必须单独失效。
+		invalidateConversationCache(h.convs, h.cache, group.ConversationID)
+		_ = h.cache.Invalidate(targetID)
 	}
 
 	c.JSON(http.StatusOK, response.SuccessNoData("member removed"))
@@ -348,6 +366,7 @@ func (h *GroupHandler) SendGroupText(c *gin.Context) {
 		return
 	}
 	h.convs.Touch(group.ConversationID, msg.ID)
+	markMessageSent(h.convs, h.unread, h.cache, group.ConversationID, userID)
 	c.JSON(http.StatusOK, response.Success(msg))
 }
 
@@ -400,5 +419,6 @@ func (h *GroupHandler) sendGroupMedia(c *gin.Context, msgType int, imagesOnly bo
 		return
 	}
 	h.convs.Touch(group.ConversationID, msg.ID)
+	markMessageSent(h.convs, h.unread, h.cache, group.ConversationID, userID)
 	c.JSON(http.StatusOK, response.Success(msg))
 }

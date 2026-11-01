@@ -3,25 +3,48 @@
 Java 版完整代码在 master 分支（参考用）。本分支为 Go 重写现场：
 
 - `sql/` —— 核心 schema + EXPLAIN 实验（阶段 1）
-- `backend-go/` —— Go 后端（阶段 1，全部接口已实现，内存 store）
+- `backend-go/` —— Go 后端（阶段 1 全接口 + 阶段 2 Redis）
+- `docs/evidence/` —— 实跑证据（EXPLAIN、Redis 冒烟）
 
 ## 运行
 
 ```bash
-cd backend-go
-go run .          # :8080
+# 只跑内存实现（默认，无需任何外部依赖）
+cd backend-go && go run .        # :8080
+
+# 带 Redis（阶段 2）
+docker compose up -d redis
+cd backend-go && REDIS_ADDR=127.0.0.1:6379 go run .
+
+# 全部基础设施（MySQL + Redis）
+docker compose up -d
 ```
 
-完整路由清单见 [`backend-go/docs/ROUTES.md`](backend-go/docs/ROUTES.md)（81 条）；
-阶段 1 的 EXPLAIN 实跑输出见 [`docs/evidence/02_explain_result.txt`](docs/evidence/02_explain_result.txt)。
+| 文档 | 内容 |
+|---|---|
+| [`backend-go/docs/ROUTES.md`](backend-go/docs/ROUTES.md) | 全部路由（89 条，自动生成） |
+| [`docs/redis.md`](docs/redis.md) | Redis key 设计、TTL、缓存粒度取舍 |
+| [`docs/evidence/02_explain_result.txt`](docs/evidence/02_explain_result.txt) | 阶段 1 EXPLAIN / EXPLAIN ANALYZE 原始输出 |
+| [`docs/evidence/redis_smoke.txt`](docs/evidence/redis_smoke.txt) | 阶段 2 Redis 冒烟（23/23） |
 
 ## 路线
 
 1. [x] 阶段1 SQL + 游标分页（EXPLAIN 见 `sql/`）
-2. [x] 阶段1 Go 接口：会话/消息/收藏/特别关心/群聊/用户/通知/监控全部实现
-3. [ ] 阶段2 Redis：会话、未读计数、验证码、token 黑名单
+2. [x] 阶段1 Go 接口：会话/消息/收藏/特别关心/群聊/用户/通知/监控
+3. [x] 阶段2 Redis：登录态、验证码、未读计数、在线状态、会话列表缓存
 4. [ ] 阶段3 WebSocket 网关（Hub 模式 + 心跳）
 5. [ ] 阶段4 Kafka 落库解耦
+
+## 阶段 2 实现说明
+
+- `REDIS_ADDR` 未配置时自动用内存实现；配置了连不上默认降级并告警，
+  `REDIS_REQUIRED=true` 则启动即退出（生产建议）
+- 未读：`unread:<userID>` hash，`HGETALL` 一次拿全，发送者不加未读
+- 在线：`presence:online:<userID>` + 90s TTL 心跳续期（进程崩了自动过期）
+- 会话列表：`cache:chatlist:<userID>` 只缓存骨架，未读实时叠加；
+  发消息时失效所有成员缓存
+- 未读/缓存写失败不影响消息发送（旁路逻辑只记日志）
+- Go 侧依赖：`github.com/redis/go-redis/v9`，测试用 `miniredis`
 
 ## 阶段 1 实现说明
 

@@ -1,0 +1,128 @@
+# 阶段 2 · Redis 实跑证据
+
+- 日期：2026-11-02
+- Redis：7.4.2（源码编译 `make MALLOC=libc`，本机无 Docker 权限时也能验证）
+- 后端：`REDIS_ADDR=127.0.0.1:6379 go run .`
+- 客户端：`curl` + `redis-cli`
+
+## 一、单元测试（miniredis，无需真实 Redis）
+
+```text
+=== RUN   TestRedisTokenStore
+--- PASS: TestRedisTokenStore (0.01s)
+=== RUN   TestRedisVerifyStore
+--- PASS: TestRedisVerifyStore (0.01s)
+=== RUN   TestRedisVerifyStore_LockAfterFiveAttempts
+--- PASS: TestRedisVerifyStore_LockAfterFiveAttempts (0.01s)
+=== RUN   TestRedisUnreadStore
+--- PASS: TestRedisUnreadStore (0.01s)
+=== RUN   TestRedisPresenceStore
+--- PASS: TestRedisPresenceStore (0.01s)
+=== RUN   TestRedisConversationCache
+--- PASS: TestRedisConversationCache (0.01s)
+PASS
+ok  github.com/Sh1tFXXK/easychat-backend/backend-go/internal/store  0.080s
+```
+
+## 二、真实 Redis 冒烟（23 条断言全过）
+
+```text
+--- 未读计数 ---
+ok   send text = 200
+ok   bob unread total = 1
+ok   bob unread conv = 5
+ok   alice unread total = 0
+ok   bob chats unread = 1
+ok   mark read = 200
+ok   bob unread after read = 0
+ok   bob chats unread after read = 0
+ok   cache invalidated (last msg) = first:hello redis second:second message
+--- 在线状态 ---
+ok   alice heartbeat = true
+ok   bob sees alice online = true
+ok   batch online count = 1
+ok   alice offline = false
+ok   bob sees alice offline = false
+ok   last_seen present = true
+--- Redis 会话（token 立即失效）---
+ok   token valid = 200
+ok   logout = 200
+ok   token revoked = 401
+--- 验证码（Redis 冷却/一次性）---
+ok   verify send = 6
+ok   verify cooldown = 429
+ok   verify ok = 200
+ok   verify replay = 400
+
+PASS=23 FAIL=0
+```
+
+阶段 1 全量回归（同一进程、同一 Redis）：
+
+```text
+PASS=70 FAIL=0
+```
+
+## 三、Redis 里的真实 key
+
+```text
+$ redis-cli --scan
+auth:token:6b63ae11...a9a4
+auth:token:7d2f935f...c7ac
+auth:token:b702701d...fafa
+cache:chatlist:5
+presence:lastseen:4
+unread:2
+unread:5
+verify:cooldown:a@b.com
+verify:cooldown:r1793559147@b.com
+```
+
+TTL 抽查：
+
+```text
+$ redis-cli ttl auth:token:6b63ae11...a9a4     -> 86389   (24h)
+$ redis-cli ttl unread:2                        -> 2591977 (30d)
+$ redis-cli ttl cache:chatlist:5                -> 43      (60s)
+$ redis-cli ttl presence:lastseen:4             -> 604792  (7d)
+```
+
+未读 hash（用户 2 在会话 1 里有 1 条未读）：
+
+```text
+$ redis-cli hgetall unread:2
+1
+1
+```
+
+心跳后在线 key：
+
+```text
+$ curl -s -X POST /api/presence/heartbeat -H "Authorization: Bearer $TA"
+{"success":true,...,"data":{"next_heartbeat_seconds":30,"online":true,"ttl_seconds":90}}
+
+$ redis-cli get presence:online:1   -> 1
+$ redis-cli ttl presence:online:1   -> 90
+$ redis-cli get presence:lastseen:1 -> 1793559162
+```
+
+会话列表缓存（未读固定为 0，由接口实时叠加）：
+
+```json
+[{"conversation_id":2,"type":1,"title":"redis-test",
+  "last_message":{"id":3,"content":"second message",...},
+  "unread":0,...}]
+```
+
+## 四、结论
+
+| 能力 | 证据 |
+|---|---|
+| 登录态存 Redis、登出立即失效 | `token revoked = 401` |
+| 验证码 60s 冷却 + 一次性 | `cooldown = 429`、`replay = 400` |
+| 未读点数：发送者不加、对方 +1 | `bob unread total = 1`、`alice unread total = 0` |
+| 已读清零 | `bob unread after read = 0` |
+| 未读叠加进会话列表 | `bob chats unread = 1` |
+| 发消息失效列表缓存 | 最后一条消息从 `hello redis` 变成 `second message` |
+| 在线状态心跳/TTL 过期 | `heartbeat = true`、`offline = false`、key TTL=90 |
+| 批量在线状态 | `batch online count = 1` |

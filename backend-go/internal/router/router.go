@@ -24,6 +24,11 @@ type Deps struct {
 	Tokens        store.TokenStore
 	Notifications store.NotificationStore
 	Errors        store.ErrorStore
+
+	// ---- 阶段 2：Redis 支撑的热点数据（内存实现也可注入，方便降级/测试）----
+	Unread   store.UnreadStore
+	Presence store.PresenceStore
+	ChatList store.ConversationCache
 }
 
 // SetupRouter 装配全项目路由。
@@ -48,13 +53,14 @@ func SetupRouter(d Deps) *gin.Engine {
 	// ---------------- handler 实例化 ----------------
 	authHandler := handler.NewAuthHandler(d.Users, d.Tokens)
 	userHandler := handler.NewUserHandler(d.Users, d.Friends, d.Verify)
-	chatHandler := handler.NewChatHandler(d.Messages, d.Conversations, d.Users)
-	messageHandler := handler.NewMessageHandler(d.Messages)
-	groupHandler := handler.NewGroupHandler(d.Groups, d.Conversations, d.Messages, d.Users)
+	chatHandler := handler.NewChatHandler(d.Messages, d.Conversations, d.Users, d.Unread, d.ChatList)
+	messageHandler := handler.NewMessageHandler(d.Messages, d.Conversations, d.Unread, d.ChatList)
+	groupHandler := handler.NewGroupHandler(d.Groups, d.Conversations, d.Messages, d.Users, d.Unread, d.ChatList)
 	favoriteHandler := handler.NewFavoriteHandler(d.Favorites)
 	attentionHandler := handler.NewSpecialAttentionHandler(d.Attention, d.Users)
 	notificationHandler := handler.NewNotificationHandler(d.Notifications)
 	adminHandler := handler.NewAdminHandler(d.Errors)
+	presenceHandler := handler.NewPresenceHandler(d.Presence, store.OnlineTTL)
 
 	api := r.Group("/api")
 
@@ -121,6 +127,23 @@ func SetupRouter(d Deps) *gin.Engine {
 		chat.POST("/chats/savePictureMsg", chatHandler.SavePictureMsg)
 		chat.POST("/chats/saveFileMsg", chatHandler.SaveFileMsg)
 		chat.POST("/chats/uploadVoice", chatHandler.UploadVoice)
+
+		// 阶段 2：未读数（Redis 计数器）
+		chat.GET("/unread", chatHandler.GetUnread)
+		chat.POST("/chats/read", chatHandler.MarkRead)
+		chat.POST("/chats/readAll", chatHandler.MarkAllRead)
+	}
+
+	// ================================================================
+	// 在线状态 /api/presence（阶段 2；阶段 3 由 WebSocket 心跳接管）
+	// ================================================================
+	presence := api.Group("/presence")
+	{
+		presence.POST("/heartbeat", presenceHandler.Heartbeat)
+		presence.POST("/offline", presenceHandler.Offline)
+		presence.DELETE("/online", presenceHandler.Offline)
+		presence.GET("/status", presenceHandler.GetStatus)
+		presence.GET("/online", presenceHandler.BatchStatus)
 	}
 
 	// 骨架期消息接口（单聊发送/列表）。
