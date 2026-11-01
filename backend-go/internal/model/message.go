@@ -8,7 +8,7 @@ type Message struct {
 	ID             uint64    `json:"id"`
 	MsgID          string    `json:"msg_id" db:"msg_id"`
 	ConversationID uint64    `json:"conversation_id" db:"conversation_id"`
-	SenderID       uint64    `json:"sender_id" db:"sender_id"`
+	SenderID       uint64    `json:"sender_id" db:"user_id"` // 表字段与简历一致叫 user_id
 	MsgType        int       `json:"msg_type" db:"msg_type"`
 	Content        string    `json:"content"`
 	Status         int       `json:"status"`

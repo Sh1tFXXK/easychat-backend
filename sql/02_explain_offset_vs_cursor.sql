@@ -11,7 +11,7 @@ USE easychat;
 -- A. 先造一批数据（不加任何提升，仅让扫描代价可见）
 --    5 万条消息分布在 10 个用户上
 -- ------------------------------------------------------------
-INSERT INTO chat_messages (msg_id, conversation_id, sender_id, msg_type, content)
+INSERT INTO chat_messages (msg_id, conversation_id, user_id, msg_type, content)
 SELECT
     MD5(RAND()),
     1,
@@ -37,7 +37,7 @@ WHERE nums.n < 50000;
 --    观察：type、rows
 -- ------------------------------------------------------------
 EXPLAIN
-SELECT id, sender_id, content, create_time
+SELECT id, user_id, content, create_time
 FROM chat_messages
 WHERE user_id = 1
 ORDER BY create_time DESC, id DESC
@@ -49,7 +49,7 @@ LIMIT 40000, 20;
 --    观察：type（应为 range 或可用 idx_user_time 且 rows 个位/十位级别）
 -- ------------------------------------------------------------
 EXPLAIN
-SELECT id, sender_id, content, create_time
+SELECT id, user_id, content, create_time
 FROM chat_messages
 WHERE user_id = 1
   AND (create_time, id) < ('2026-01-01 00:00:00', 9000000)

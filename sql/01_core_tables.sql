@@ -57,15 +57,15 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY COMMENT '消息ID（游标分页的锚点）',
     msg_id          CHAR(32)     NOT NULL COMMENT '业务消息UUID——Kafka幂等落库去重键（阶段4用）',
     conversation_id BIGINT UNSIGNED NOT NULL COMMENT '会话ID',
-    sender_id       BIGINT UNSIGNED NOT NULL COMMENT '发送者',
+    user_id         BIGINT UNSIGNED NOT NULL COMMENT '发送者用户ID（对应简历的 (user_id, create_time) 组合索引）',
     msg_type        TINYINT      NOT NULL DEFAULT 1 COMMENT '1文本 2图片 3语音…',
     content         TEXT         NOT NULL COMMENT '消息体（含JSON图片路径等）',
     status          TINYINT      NOT NULL DEFAULT 0 COMMENT '0已投递 1已撤回',
     create_time     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    -- 等值前缀=sender的场景（我的消息/会话内游标分页）
+    -- 会话内游标分页：conversation_id 等值 + create_time 范围/排序
     KEY idx_conv_time (conversation_id, create_time),
-    -- 等值前缀=user_id的场景（简历描述：“聊天记录表以(user_id, create_time)组合索引”）
+    -- 用户维度的历史记录（简历描述：聊天记录表以 (user_id, create_time) 组合索引）
     KEY idx_user_time (user_id, create_time),
     -- 消息幂等唯一键：Kafka重放/客户端重发不会产生双条
     UNIQUE KEY uk_msg_id (msg_id)
