@@ -13,8 +13,9 @@ func main() {
 	userStore := store.NewInMemoryUserStore()
 	messageStore := store.NewInMemoryMessageStore()
 	favoriteStore := store.NewInMemoryFavoriteStore()
+	specialAttentionStore := store.NewInMemorySpecialAttentionStore()
 
-	r := router.SetupRouter(userStore, messageStore, favoriteStore)
+	r := router.SetupRouter(userStore, messageStore, favoriteStore, specialAttentionStore)
 
 	log.Println("easychat-go backend listening on :8080")
 	if err := r.Run(":8080"); err != nil {

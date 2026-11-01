@@ -37,6 +37,8 @@ func Error(message string) Response {
 }
 
 // ErrorWithCode returns an error response with a custom HTTP/application code.
+// 注意 Code 必须用传入的 code —— 之前这里误写成 CodeSuccess，
+// 导致 401/404/501 的响应体里 code 永远是 200，前端只能靠 HTTP 状态码判断。
 func ErrorWithCode(message string, code int) Response {
-	return Response{Success: false, Message: message, Code: CodeSuccess, Data: nil}
+	return Response{Success: false, Message: message, Code: code, Data: nil}
 }

@@ -90,8 +90,16 @@ func (h *UserHandler) Login(c *gin.Context) {
 // @Summary      Get user info by id
 // @Router       /api/user/:id [get]
 func (h *UserHandler) GetUser(c *gin.Context) {
+	// 兼容两种取参方式：
+	//   GET /api/user/user?id=1   —— Java 版原路径，参数在 query
+	//   GET /api/user/1           —— Go 骨架期的 RESTful 写法，参数在 path
+	// 先看 path 再看 query，两者都没有才判定为非法。
+	rawID := c.Param("id")
+	if rawID == "" {
+		rawID = c.Query("id")
+	}
 	var id uint64
-	if _, err := fmt.Sscanf(c.Param("id"), "%d", &id); err != nil {
+	if _, err := fmt.Sscanf(rawID, "%d", &id); err != nil {
 		c.JSON(http.StatusBadRequest, response.Error("invalid user id"))
 		return
 	}
