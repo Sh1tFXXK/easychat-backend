@@ -10,9 +10,9 @@ type Response struct {
 }
 
 const (
-	CodeSuccess = 200
-	CodeBadReq  = 400
-	CodeNotFound = 404
+	CodeSuccess   = 200
+	CodeBadReq    = 400
+	CodeNotFound  = 404
 	CodeServerErr = 500
 )
 

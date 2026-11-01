@@ -19,3 +19,8 @@ import (
 func notImplemented(c *gin.Context, name string) {
 	c.JSON(http.StatusNotImplemented, response.ErrorWithCode(name+": 尚未实现（TODO）", http.StatusNotImplemented))
 }
+
+// errorBody 是 response.ErrorWithCode 的短别名，避免 handler 里到处写长名字。
+func errorBody(msg string, code int) response.Response {
+	return response.ErrorWithCode(msg, code)
+}

@@ -1,134 +1,354 @@
 package handler
 
 import (
+	"errors"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/Sh1tFXXK/easychat-backend/backend-go/internal/model"
+	"github.com/Sh1tFXXK/easychat-backend/backend-go/internal/response"
+	"github.com/Sh1tFXXK/easychat-backend/backend-go/internal/store"
 	"github.com/gin-gonic/gin"
 )
 
 // 本文件承接 FavoriteController 里剩余的 18 个接口：批量操作 / 高级搜索 / 分类 / 标签。
 //
-// Java 对照：master:src/main/java/org/example/easychat/controller/FavoriteController.java
-//
-// 做题顺序建议（由易到难）：
-//
-//	1. 分类：CreateCategory → GetCategories → UpdateCategory → DeleteCategory → InitDefaultCategories
-//	2. 标签：CreateTag → GetTags → GetPopularTags → DeleteTag → CleanupTags
-//	3. 读写：UpdateFavorite → CheckDuplicate → GetStatistics
-//	4. 批量：BatchDeleteFavorites → BatchAddTags → BatchRemoveTags → BatchUpdateCategory → AdvancedSearch
-//
-// 批量接口的通用原则：**先校验归属，再执行**。
-// 例：批量删除 10 条，其中 1 条是别人的 —— 要么整批失败（事务），
-// 要么返回 {success:9, failed:1} 并说明原因，绝不能静默删掉 9 条却报成功。
+// 批量接口的统一原则：**先校验归属，再执行**。
+// 存储层按 id 逐条判断 user_id，越权/不存在的 id 会进入 failed_ids，
+// 而不是静默删掉一部分却整体报成功。
 
 // BatchDeleteFavorites DELETE /api/favorites/batch
-// TODO: 请求体是 id 数组；用一条 UPDATE ... WHERE id IN (?) AND user_id = ? 完成，
-//       天然带归属校验，比"循环单删"少 N 次往返。
 func (h *FavoriteHandler) BatchDeleteFavorites(c *gin.Context) {
-	notImplemented(c, "FavoriteHandler.BatchDeleteFavorites")
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+
+	var req model.BatchIDsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorWithCode("invalid request body: "+err.Error(), http.StatusBadRequest))
+		return
+	}
+
+	res := h.store.BatchDelete(userID, req.IDs)
+	c.JSON(http.StatusOK, response.Success(res))
 }
 
 // UpdateFavorite PUT /api/favorites/:id
-// TODO: 只允许改 title/content/tags/note/category_id 这些字段；
-//       先 GetByID(userID,id) 做归属校验，或者直接写进 UPDATE 的 WHERE 条件。
 func (h *FavoriteHandler) UpdateFavorite(c *gin.Context) {
-	notImplemented(c, "FavoriteHandler.UpdateFavorite")
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
+
+	var req model.FavoriteUpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorWithCode("invalid request body: "+err.Error(), http.StatusBadRequest))
+		return
+	}
+
+	fav, err := h.store.Update(userID, id, req)
+	if err != nil {
+		// 不存在和越权统一 404，防 id 枚举。
+		if errors.Is(err, store.ErrFavoriteNotFound) || errors.Is(err, store.ErrFavoriteForbidden) {
+			c.JSON(http.StatusNotFound, response.ErrorWithCode("favorite not found", http.StatusNotFound))
+			return
+		}
+		c.JSON(http.StatusInternalServerError, response.ErrorWithCode("failed to update favorite", http.StatusInternalServerError))
+		return
+	}
+	c.JSON(http.StatusOK, response.Success(fav))
 }
 
 // AdvancedSearch POST /api/favorites/search
-// TODO: 动态条件拼 SQL 时用参数占位符，绝不字符串拼接；
-//       关键词搜索注意 % 和 _ 的转义（LIKE 通配符注入）。
 func (h *FavoriteHandler) AdvancedSearch(c *gin.Context) {
-	notImplemented(c, "FavoriteHandler.AdvancedSearch")
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+
+	var req model.FavoriteSearchRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorWithCode("invalid request body: "+err.Error(), http.StatusBadRequest))
+		return
+	}
+	req.ItemType = strings.ToUpper(strings.TrimSpace(req.ItemType))
+
+	items, nextCursor, err := h.store.Search(userID, req)
+	if err != nil {
+		if errors.Is(err, store.ErrFavoriteBadCursor) {
+			c.JSON(http.StatusBadRequest, response.ErrorWithCode("invalid cursor", http.StatusBadRequest))
+			return
+		}
+		c.JSON(http.StatusInternalServerError, response.ErrorWithCode("search failed", http.StatusInternalServerError))
+		return
+	}
+	if items == nil {
+		items = []*model.Favorite{}
+	}
+	c.JSON(http.StatusOK, response.Success(gin.H{"items": items, "next_cursor": nextCursor}))
 }
 
 // BatchUpdateCategory PUT /api/favorites/batch/category
-// TODO: 分类本身也要校验归属（category_id 属于当前用户），否则能把收藏塞进别人的分类。
 func (h *FavoriteHandler) BatchUpdateCategory(c *gin.Context) {
-	notImplemented(c, "FavoriteHandler.BatchUpdateCategory")
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+
+	var req model.BatchCategoryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorWithCode("invalid request body: "+err.Error(), http.StatusBadRequest))
+		return
+	}
+
+	res, err := h.store.BatchUpdateCategory(userID, req.IDs, req.CategoryID)
+	if err != nil {
+		if errors.Is(err, store.ErrCategoryNotFound) {
+			c.JSON(http.StatusNotFound, response.ErrorWithCode("category not found", http.StatusNotFound))
+			return
+		}
+		c.JSON(http.StatusInternalServerError, response.ErrorWithCode("failed to update category", http.StatusInternalServerError))
+		return
+	}
+	c.JSON(http.StatusOK, response.Success(res))
 }
 
 // BatchAddTags PUT /api/favorites/batch/tags/add
-// TODO: 标签量大时考虑"先查已有、只插缺失"，避免唯一键冲突报错。
 func (h *FavoriteHandler) BatchAddTags(c *gin.Context) {
-	notImplemented(c, "FavoriteHandler.BatchAddTags")
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+
+	var req model.BatchTagsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorWithCode("invalid request body: "+err.Error(), http.StatusBadRequest))
+		return
+	}
+	c.JSON(http.StatusOK, response.Success(h.store.BatchAddTags(userID, req.IDs, req.Tags)))
 }
 
 // BatchRemoveTags PUT /api/favorites/batch/tags/remove
-// TODO: 幂等：移除不存在的标签不报错。
 func (h *FavoriteHandler) BatchRemoveTags(c *gin.Context) {
-	notImplemented(c, "FavoriteHandler.BatchRemoveTags")
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+
+	var req model.BatchTagsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorWithCode("invalid request body: "+err.Error(), http.StatusBadRequest))
+		return
+	}
+	c.JSON(http.StatusOK, response.Success(h.store.BatchRemoveTags(userID, req.IDs, req.Tags)))
 }
 
 // GetStatistics GET /api/favorites/statistics
-// TODO: 按 item_type / category 聚合计数；数据量大时考虑缓存或汇总表，
-//       别让首页统计把 favorites 全表扫一遍。
 func (h *FavoriteHandler) GetStatistics(c *gin.Context) {
-	notImplemented(c, "FavoriteHandler.GetStatistics")
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+	c.JSON(http.StatusOK, response.Success(h.store.Statistics(userID)))
 }
 
 // CheckDuplicate GET /api/favorites/check-duplicate?item_type=&source_chat_id=
-// TODO: "这条消息是否已收藏"——前端收藏按钮的状态依赖它，要考虑高频调用（加索引 + 可缓存）。
 func (h *FavoriteHandler) CheckDuplicate(c *gin.Context) {
-	notImplemented(c, "FavoriteHandler.CheckDuplicate")
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+
+	itemType := strings.ToUpper(strings.TrimSpace(c.Query("item_type")))
+	if itemType == "" {
+		c.JSON(http.StatusBadRequest, response.ErrorWithCode("item_type is required", http.StatusBadRequest))
+		return
+	}
+	sourceChatID, ok := parseUintQuery(c, "source_chat_id")
+	if !ok {
+		return
+	}
+
+	dup := h.store.CheckDuplicate(userID, itemType, sourceChatID)
+	c.JSON(http.StatusOK, response.Success(gin.H{"duplicate": dup}))
 }
 
 // CreateCategory POST /api/favorites/categories
-// TODO: 同一用户下分类名唯一；默认排序值怎么给（MAX(sort)+1 还是 0）要定下来。
 func (h *FavoriteHandler) CreateCategory(c *gin.Context) {
-	notImplemented(c, "FavoriteHandler.CreateCategory")
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+
+	var req model.CategoryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorWithCode("invalid request body: "+err.Error(), http.StatusBadRequest))
+		return
+	}
+
+	cat, err := h.store.CreateCategory(userID, req)
+	if err != nil {
+		if errors.Is(err, store.ErrCategoryDuplicate) {
+			c.JSON(http.StatusConflict, response.ErrorWithCode("分类名已存在", http.StatusConflict))
+			return
+		}
+		c.JSON(http.StatusBadRequest, response.ErrorWithCode(err.Error(), http.StatusBadRequest))
+		return
+	}
+	c.JSON(http.StatusOK, response.Success(cat))
 }
 
 // UpdateCategory PUT /api/favorites/categories/:id
-// TODO: 归属校验 + 只允许改 name/sort/icon 等白名单字段。
 func (h *FavoriteHandler) UpdateCategory(c *gin.Context) {
-	notImplemented(c, "FavoriteHandler.UpdateCategory")
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
+
+	var req model.CategoryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorWithCode("invalid request body: "+err.Error(), http.StatusBadRequest))
+		return
+	}
+
+	cat, err := h.store.UpdateCategory(userID, id, req)
+	if err != nil {
+		switch {
+		case errors.Is(err, store.ErrCategoryNotFound):
+			c.JSON(http.StatusNotFound, response.ErrorWithCode("category not found", http.StatusNotFound))
+		case errors.Is(err, store.ErrCategoryDuplicate):
+			c.JSON(http.StatusConflict, response.ErrorWithCode("分类名已存在", http.StatusConflict))
+		default:
+			c.JSON(http.StatusBadRequest, response.ErrorWithCode(err.Error(), http.StatusBadRequest))
+		}
+		return
+	}
+	c.JSON(http.StatusOK, response.Success(cat))
 }
 
 // DeleteCategory DELETE /api/favorites/categories/:id
-// TODO: 分类下还有收藏时怎么办？三种策略选一个并写进注释：
 //
-//	a) 拒绝删除（409）  b) 把收藏移到"未分类"  c) 级联删除收藏
+// 策略：分类下的收藏移到「未分类」(category_id=0)，不连带删除收藏。
 func (h *FavoriteHandler) DeleteCategory(c *gin.Context) {
-	notImplemented(c, "FavoriteHandler.DeleteCategory")
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
+
+	if err := h.store.DeleteCategory(userID, id); err != nil {
+		c.JSON(http.StatusNotFound, response.ErrorWithCode("category not found", http.StatusNotFound))
+		return
+	}
+	c.JSON(http.StatusOK, response.SuccessNoData("category deleted"))
 }
 
 // GetCategories GET /api/favorites/categories
-// TODO: 返回每个分类下的收藏数量（一次 GROUP BY 拿完，别循环 COUNT）。
 func (h *FavoriteHandler) GetCategories(c *gin.Context) {
-	notImplemented(c, "FavoriteHandler.GetCategories")
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+	c.JSON(http.StatusOK, response.Success(h.store.ListCategories(userID)))
 }
 
 // InitDefaultCategories POST /api/favorites/categories/init
-// TODO: 幂等 —— 重复调用不能产生重复分类（靠唯一键或先查后插）。
 func (h *FavoriteHandler) InitDefaultCategories(c *gin.Context) {
-	notImplemented(c, "FavoriteHandler.InitDefaultCategories")
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+	added := h.store.InitDefaultCategories(userID)
+	c.JSON(http.StatusOK, response.Success(gin.H{"created": added}))
 }
 
 // CreateTag POST /api/favorites/tags
-// TODO: 同一用户标签名唯一；考虑大小写/空白归一化。
 func (h *FavoriteHandler) CreateTag(c *gin.Context) {
-	notImplemented(c, "FavoriteHandler.CreateTag")
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+
+	var req model.FavoriteTagRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorWithCode("invalid request body: "+err.Error(), http.StatusBadRequest))
+		return
+	}
+
+	tag, err := h.store.CreateTag(userID, req.Name)
+	if err != nil {
+		if errors.Is(err, store.ErrTagDuplicate) {
+			c.JSON(http.StatusConflict, response.ErrorWithCode("标签已存在", http.StatusConflict))
+			return
+		}
+		c.JSON(http.StatusBadRequest, response.ErrorWithCode(err.Error(), http.StatusBadRequest))
+		return
+	}
+	c.JSON(http.StatusOK, response.Success(tag))
 }
 
 // DeleteTag DELETE /api/favorites/tags/:id
-// TODO: 归属校验 + 关联关系清理（favorite_tags 中间表）。
 func (h *FavoriteHandler) DeleteTag(c *gin.Context) {
-	notImplemented(c, "FavoriteHandler.DeleteTag")
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
+
+	if err := h.store.DeleteTag(userID, id); err != nil {
+		c.JSON(http.StatusNotFound, response.ErrorWithCode("tag not found", http.StatusNotFound))
+		return
+	}
+	c.JSON(http.StatusOK, response.SuccessNoData("tag deleted"))
 }
 
 // GetTags GET /api/favorites/tags
-// TODO: 返回标签 + 使用次数，按次数倒序。
 func (h *FavoriteHandler) GetTags(c *gin.Context) {
-	notImplemented(c, "FavoriteHandler.GetTags")
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+	c.JSON(http.StatusOK, response.Success(h.store.ListTags(userID)))
 }
 
-// GetPopularTags GET /api/favorites/tags/popular
-// TODO: 热门标签 = 使用次数 TopN；上限参数要有默认值（比如 10）和最大值（比如 50）。
+// GetPopularTags GET /api/favorites/tags/popular?limit=
 func (h *FavoriteHandler) GetPopularTags(c *gin.Context) {
-	notImplemented(c, "FavoriteHandler.GetPopularTags")
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+
+	limit := 10
+	if raw := c.Query("limit"); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil {
+			limit = v
+		}
+	}
+	c.JSON(http.StatusOK, response.Success(h.store.PopularTags(userID, limit)))
 }
 
 // CleanupTags DELETE /api/favorites/tags/cleanup
-// TODO: 清理"没人用的标签"；删除前先统计并返回将删除的数量，避免误删。
 func (h *FavoriteHandler) CleanupTags(c *gin.Context) {
-	notImplemented(c, "FavoriteHandler.CleanupTags")
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+	removed := h.store.CleanupTags(userID)
+	c.JSON(http.StatusOK, response.Success(gin.H{"removed": removed}))
 }

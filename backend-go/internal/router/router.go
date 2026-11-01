@@ -2,58 +2,65 @@ package router
 
 import (
 	"github.com/Sh1tFXXK/easychat-backend/backend-go/internal/handler"
+	"github.com/Sh1tFXXK/easychat-backend/backend-go/internal/middleware"
 	"github.com/Sh1tFXXK/easychat-backend/backend-go/internal/store"
 	"github.com/gin-gonic/gin"
 )
 
+// Deps 汇总所有 store 依赖。
+//
+// 为什么不用一长串参数：十几个 store 位置传参极易传错（还都是接口类型，
+// 编译器也拦不住把 UserStore 传到 MessageStore 的位置），聚合成结构体后
+// 具名字段一眼能看出漏了谁。
+type Deps struct {
+	Users         store.UserStore
+	Messages      store.MessageStore
+	Conversations store.ConversationStore
+	Groups        store.GroupStore
+	Favorites     store.FavoriteStore
+	Attention     store.SpecialAttentionStore
+	Friends       store.FriendStore
+	Verify        store.VerifyStore
+	Tokens        store.TokenStore
+	Notifications store.NotificationStore
+	Errors        store.ErrorStore
+}
+
 // SetupRouter 装配全项目路由。
 //
-// 设计原则：
-//  1. 路由只在这里注册 —— handler 不自己挂路由，store 不感知 HTTP；
-//  2. 路径以 Java 版 controller 的 @RequestMapping 为准（前端已经按它写死），
-//     有前缀分歧的（/auth、/user/notification）做双挂载，兼容前端 baseURL=/api；
-//  3. 未实现的 handler 统一返回 501，联调时能一眼看出"路由通、逻辑没写"。
-//
-// Java 对照表（master 分支）：
-//
-//	AuthController              /auth
-//	UserController              /api/user
-//	ChatController              /api/chat
-//	GroupChatController         /api/group
-//	FavoriteController          /api/favorites
-//	SpecialAttentionController  /api/user/special-attention
-//	NotificationController      /user/notification
-//	ErrorMonitorController      /admin/error-monitor
-func SetupRouter(
-	userStore store.UserStore,
-	messageStore store.MessageStore,
-	favoriteStore store.FavoriteStore,
-	specialAttentionStore store.SpecialAttentionStore,
-) *gin.Engine {
+// 路径以 Java 版 controller 的 @RequestMapping 为准（前端已按它写死），
+// 有前缀分歧的（/auth、/user/notification）做双挂载，兼容 baseURL=/api。
+func SetupRouter(d Deps) *gin.Engine {
 	r := gin.Default()
+
+	// 认证中间件：解析 Bearer token 并写入上下文。
+	// 没有 token 时不拦请求（健康检查/登录/注册是公开的），
+	// 需要登录的接口由 handler 里的 requireUser 兜底。
+	r.Use(middleware.ResolveUser(d.Tokens))
+
+	// 静态文件：头像/图片/文件。
+	r.Static("/uploads", "./uploads")
 
 	// ---------------- 健康检查 ----------------
 	r.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
 
-	// ---------------- handler 实例化（依赖在这里注入，别在 handler 里 new store） ----------------
-	authHandler := handler.NewAuthHandler()
-	userHandler := handler.NewUserHandler(userStore)
-	chatHandler := handler.NewChatHandler(messageStore)
-	messageHandler := handler.NewMessageHandler(messageStore)
-	groupHandler := handler.NewGroupHandler()
-	favoriteHandler := handler.NewFavoriteHandler(favoriteStore)
-	specialAttentionHandler := handler.NewSpecialAttentionHandler(specialAttentionStore)
-	notificationHandler := handler.NewNotificationHandler()
-	adminHandler := handler.NewAdminHandler()
+	// ---------------- handler 实例化 ----------------
+	authHandler := handler.NewAuthHandler(d.Users, d.Tokens)
+	userHandler := handler.NewUserHandler(d.Users, d.Friends, d.Verify)
+	chatHandler := handler.NewChatHandler(d.Messages, d.Conversations, d.Users)
+	messageHandler := handler.NewMessageHandler(d.Messages)
+	groupHandler := handler.NewGroupHandler(d.Groups, d.Conversations, d.Messages, d.Users)
+	favoriteHandler := handler.NewFavoriteHandler(d.Favorites)
+	attentionHandler := handler.NewSpecialAttentionHandler(d.Attention, d.Users)
+	notificationHandler := handler.NewNotificationHandler(d.Notifications)
+	adminHandler := handler.NewAdminHandler(d.Errors)
 
 	api := r.Group("/api")
 
 	// ================================================================
 	// 认证 /auth
 	// ================================================================
-	// 双挂载：Java 原路径是 /auth/login；前端 request.js 的 baseURL=/api，
-	// 实际请求打到 /api/auth/login。两个都挂，前后端都不用改。
 	authRoot := r.Group("/auth")
 	authAPI := api.Group("/auth")
 	for _, g := range []*gin.RouterGroup{authRoot, authAPI} {
@@ -66,15 +73,13 @@ func SetupRouter(
 	// ================================================================
 	user := api.Group("/user")
 	{
-		// -- 账号 --
 		user.POST("/register", userHandler.Register)
-		user.POST("/login", userHandler.Login) // Go 骨架期保留，前端切到 /auth/login 后可下掉
+		user.POST("/login", userHandler.Login) // 骨架期兼容，正式登录走 /auth/login
 
-		// -- 验证码 --
 		user.POST("/verifyCode/send", userHandler.SendVerifyCode)
 		user.POST("/verifyCode/validate", userHandler.ValidateVerifyCode)
 
-		// -- 资料（注意 Java 的怪路径：/api/user/user?id=） --
+		// Java 的怪路径：/api/user/user?id=
 		user.GET("/user", userHandler.GetUser)
 		user.POST("/user/edit", userHandler.EditUser)
 		user.POST("/user/changeAvatar", userHandler.ChangeAvatar)
@@ -82,31 +87,27 @@ func SetupRouter(
 		user.POST("/user/addTag", userHandler.AddTag)
 		user.POST("/user/removeTag", userHandler.RemoveTag)
 
-		// -- 查询与安全 --
 		user.GET("/search", userHandler.SearchUser)
 		user.POST("/username/validate", userHandler.ValidateUsername)
 		user.POST("/password/validate", userHandler.ValidatePassword)
 
-		// -- 好友 --
 		user.GET("/friends", userHandler.GetFriendsList)
 		user.GET("/friendVerify", userHandler.GetFriendVerifyList)
 
-		// -- Go 骨架期保留的 RESTful 写法，Java 没有；前端切完可删 --
+		// Go 骨架期的 RESTful 写法，前端切完可删。
 		user.GET("/:id", userHandler.GetUser)
 
-		// ============================================================
-		// 特别关心 /api/user/special-attention
-		// ============================================================
+		// ---------------- 特别关心 ----------------
 		attention := user.Group("/special-attention")
 		{
-			attention.GET("", specialAttentionHandler.GetAttentionList)
-			attention.POST("", specialAttentionHandler.AddAttention)
-			attention.PUT("", specialAttentionHandler.UpdateAttention)
-			attention.DELETE("", specialAttentionHandler.RemoveAttention)
-			attention.DELETE("/by-user", specialAttentionHandler.RemoveAttentionByUser)
-			attention.POST("/batch", specialAttentionHandler.BatchOperation)
-			attention.GET("/check", specialAttentionHandler.CheckAttentionStatus)
-			attention.GET("/updates", specialAttentionHandler.GetAttentionUpdates)
+			attention.GET("", attentionHandler.GetAttentionList)
+			attention.POST("", attentionHandler.AddAttention)
+			attention.PUT("", attentionHandler.UpdateAttention)
+			attention.DELETE("", attentionHandler.RemoveAttention)
+			attention.DELETE("/by-user", attentionHandler.RemoveAttentionByUser)
+			attention.POST("/batch", attentionHandler.BatchOperation)
+			attention.GET("/check", attentionHandler.CheckAttentionStatus)
+			attention.GET("/updates", attentionHandler.GetAttentionUpdates)
 		}
 	}
 
@@ -122,8 +123,7 @@ func SetupRouter(
 		chat.POST("/chats/uploadVoice", chatHandler.UploadVoice)
 	}
 
-	// Go 骨架期的消息接口（单聊发送/列表），Java 版没有这两个路径。
-	// 阶段 1 验证游标分页用的就是它们，暂时保留。
+	// 骨架期消息接口（单聊发送/列表）。
 	messages := api.Group("/messages")
 	{
 		messages.POST("", messageHandler.CreateMessage)
@@ -136,7 +136,6 @@ func SetupRouter(
 	group := api.Group("/group")
 	{
 		group.POST("/groups", groupHandler.CreateGroup)
-
 		group.GET("/groups/:groupId", groupHandler.GetGroupDetail)
 		group.PUT("/groups/:groupId", groupHandler.UpdateGroup)
 		group.DELETE("/groups/:groupId", groupHandler.DeleteGroup)
@@ -158,14 +157,12 @@ func SetupRouter(
 	// ================================================================
 	favorites := api.Group("/favorites")
 	{
-		// -- 基础 CRUD（已实现） --
 		favorites.POST("", favoriteHandler.AddFavorite)
 		favorites.GET("", favoriteHandler.ListFavorites)
 		favorites.GET("/:id", favoriteHandler.GetFavorite)
 		favorites.PUT("/:id", favoriteHandler.UpdateFavorite)
 		favorites.DELETE("/:id", favoriteHandler.DeleteFavorite)
 
-		// -- 批量与搜索 --
 		favorites.DELETE("/batch", favoriteHandler.BatchDeleteFavorites)
 		favorites.POST("/search", favoriteHandler.AdvancedSearch)
 		favorites.PUT("/batch/category", favoriteHandler.BatchUpdateCategory)
@@ -174,14 +171,12 @@ func SetupRouter(
 		favorites.GET("/statistics", favoriteHandler.GetStatistics)
 		favorites.GET("/check-duplicate", favoriteHandler.CheckDuplicate)
 
-		// -- 分类 --
 		favorites.POST("/categories", favoriteHandler.CreateCategory)
 		favorites.GET("/categories", favoriteHandler.GetCategories)
 		favorites.POST("/categories/init", favoriteHandler.InitDefaultCategories)
 		favorites.PUT("/categories/:id", favoriteHandler.UpdateCategory)
 		favorites.DELETE("/categories/:id", favoriteHandler.DeleteCategory)
 
-		// -- 标签 --
 		favorites.POST("/tags", favoriteHandler.CreateTag)
 		favorites.GET("/tags", favoriteHandler.GetTags)
 		favorites.GET("/tags/popular", favoriteHandler.GetPopularTags)
@@ -203,7 +198,7 @@ func SetupRouter(
 	// ================================================================
 	// 错误监控 /admin/error-monitor
 	//
-	// 安全提醒：这一组必须在实现时套管理员鉴权中间件（当前是裸路由，只能本机调试用）。
+	// TODO(安全): 生产环境必须套管理员鉴权中间件。
 	// ================================================================
 	admin := r.Group("/admin/error-monitor")
 	{

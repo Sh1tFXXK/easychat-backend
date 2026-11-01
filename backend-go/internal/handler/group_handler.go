@@ -1,68 +1,404 @@
 package handler
 
 import (
+	"net/http"
+	"strconv"
+
+	"github.com/Sh1tFXXK/easychat-backend/backend-go/internal/model"
+	"github.com/Sh1tFXXK/easychat-backend/backend-go/internal/response"
+	"github.com/Sh1tFXXK/easychat-backend/backend-go/internal/store"
 	"github.com/gin-gonic/gin"
 )
 
 // GroupHandler 对应 Java 的 GroupChatController（@RequestMapping("/api/group")）。
 //
-// 注意 Java 侧的路径拼接很随意：类上是 /api/group，方法上又写 "groups" 没有前导斜杠，
-// 最终生效路径是 /api/group/groups —— 前端就是按这个写死的，别"顺手修正"。
+// 路径注意：Java 类上是 /api/group，方法上又写 "groups" 没有前导斜杠，
+// 最终生效路径是 /api/group/groups —— 前端按这个写死，不要"顺手修正"。
 type GroupHandler struct {
-	// TODO(你来实现时再加字段): groupStore store.GroupStore、messageStore store.MessageStore
+	groups   store.GroupStore
+	convs    store.ConversationStore
+	messages store.MessageStore
+	users    store.UserStore
 }
 
-// NewGroupHandler 创建 GroupHandler。
-func NewGroupHandler() *GroupHandler {
-	return &GroupHandler{}
+// NewGroupHandler 注入依赖。
+func NewGroupHandler(groups store.GroupStore, convs store.ConversationStore, messages store.MessageStore, users store.UserStore) *GroupHandler {
+	return &GroupHandler{groups: groups, convs: convs, messages: messages, users: users}
 }
 
 // CreateGroup POST /api/group/groups
-// TODO: 建群 + 建群主成员记录 + 拉初始成员，三件事必须在同一个事务里；
-//       只建群不建成员 = 产生一个谁都进不去的"僵尸群"。
-func (h *GroupHandler) CreateGroup(c *gin.Context) { notImplemented(c, "GroupHandler.CreateGroup") }
+//
+// 事务语义（MySQL 版必须在一个事务里）：
+//  1. 建 conversations 行（消息路由的锚点）
+//  2. 建 group 资料行
+//  3. 写 group_member（群主 + 初始成员）
+//
+// 只建群不建成员 = 产生一个谁都进不去的"僵尸群"。
+func (h *GroupHandler) CreateGroup(c *gin.Context) {
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+
+	var req model.CreateGroupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorWithCode("invalid request body: "+err.Error(), http.StatusBadRequest))
+		return
+	}
+
+	conv := h.convs.CreateGroup(userID, req.Name, req.MemberIDs)
+	group, err := h.groups.Create(&model.Group{
+		ConversationID: conv.ID,
+		Name:           req.Name,
+		Avatar:         req.Avatar,
+		Notice:         req.Notice,
+		OwnerID:        userID,
+	}, req.MemberIDs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ErrorWithCode("failed to create group", http.StatusInternalServerError))
+		return
+	}
+
+	c.JSON(http.StatusOK, response.Success(group))
+}
 
 // GetGroupDetail GET /api/group/groups/:groupId
-// TODO: 先校验"请求者是不是群成员"，再返回详情 —— 非成员能看到群信息本身就是越权。
-func (h *GroupHandler) GetGroupDetail(c *gin.Context) { notImplemented(c, "GroupHandler.GetGroupDetail") }
+func (h *GroupHandler) GetGroupDetail(c *gin.Context) {
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+	groupID, ok := parseUintParam(c, "groupId")
+	if !ok {
+		return
+	}
+
+	// 非成员看不到群信息（群资料也可能包含敏感内容）。
+	if !h.groups.IsMember(groupID, userID) {
+		c.JSON(http.StatusNotFound, response.ErrorWithCode("group not found", http.StatusNotFound))
+		return
+	}
+	group, err := h.groups.Get(groupID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, response.ErrorWithCode("group not found", http.StatusNotFound))
+		return
+	}
+	c.JSON(http.StatusOK, response.Success(group))
+}
 
 // UpdateGroup PUT /api/group/groups/:groupId
-// TODO: 只有群主/管理员能改；请求体是 Map<String,String>，要显式白名单允许改的字段
-//       （别把传来的 map 直接塞进 UPDATE，那是典型的 mass assignment 漏洞）。
-func (h *GroupHandler) UpdateGroup(c *gin.Context) { notImplemented(c, "GroupHandler.UpdateGroup") }
+//
+// 只有群主能改，且只允许改 name/avatar/notice 三个字段（白名单）。
+// 直接把请求里的 map 塞进 UPDATE 是典型的 mass assignment 漏洞。
+func (h *GroupHandler) UpdateGroup(c *gin.Context) {
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+	groupID, ok := parseUintParam(c, "groupId")
+	if !ok {
+		return
+	}
+
+	if h.groups.Role(groupID, userID) != model.GroupRoleOwner {
+		c.JSON(http.StatusForbidden, response.ErrorWithCode("only the group owner can update the group", http.StatusForbidden))
+		return
+	}
+
+	var req model.UpdateGroupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorWithCode("invalid request body: "+err.Error(), http.StatusBadRequest))
+		return
+	}
+
+	group, err := h.groups.Update(groupID, req)
+	if err != nil {
+		c.JSON(http.StatusNotFound, response.ErrorWithCode("group not found", http.StatusNotFound))
+		return
+	}
+	c.JSON(http.StatusOK, response.Success(group))
+}
 
 // DeleteGroup DELETE /api/group/groups/:groupId
-// TODO: 软删还是硬删要想清楚；成员表、消息表怎么处理？级联删除要在一个事务里完成。
-func (h *GroupHandler) DeleteGroup(c *gin.Context) { notImplemented(c, "GroupHandler.DeleteGroup") }
+//
+// 群主解散群：删群资料、删会话、成员关系。消息记录先保留（审计/回溯），
+// 真要物理删除应走独立的归档任务。
+func (h *GroupHandler) DeleteGroup(c *gin.Context) {
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+	groupID, ok := parseUintParam(c, "groupId")
+	if !ok {
+		return
+	}
+
+	group, err := h.groups.Get(groupID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, response.ErrorWithCode("group not found", http.StatusNotFound))
+		return
+	}
+	if group.OwnerID != userID {
+		c.JSON(http.StatusForbidden, response.ErrorWithCode("only the group owner can delete the group", http.StatusForbidden))
+		return
+	}
+
+	if err := h.groups.Delete(groupID); err != nil {
+		c.JSON(http.StatusNotFound, response.ErrorWithCode("group not found", http.StatusNotFound))
+		return
+	}
+	h.convs.Delete(group.ConversationID)
+
+	c.JSON(http.StatusOK, response.SuccessNoData("group deleted"))
+}
 
 // GetUserGroups GET /api/group/users/:userId/groups
-// TODO: 别信路径里的 userId —— 要么和当前登录用户一致，要么是管理员；否则能看别人全部群列表。
-func (h *GroupHandler) GetUserGroups(c *gin.Context) { notImplemented(c, "GroupHandler.GetUserGroups") }
+//
+// 只允许查询自己：路径里的 userId 不可信，看到人全量群列表本身就是越权。
+func (h *GroupHandler) GetUserGroups(c *gin.Context) {
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+	targetID, ok := parseUintParam(c, "userId")
+	if !ok {
+		return
+	}
+	if targetID != userID {
+		c.JSON(http.StatusForbidden, response.ErrorWithCode("cannot list another user's groups", http.StatusForbidden))
+		return
+	}
+
+	c.JSON(http.StatusOK, response.Success(h.groups.ListByUser(userID)))
+}
 
 // InviteMembers POST /api/group/groups/:groupId/members
-// TODO: 请求体是 userId 数组；注意去重 + 已在群里的成员要跳过（靠唯一键兜底也行）。
-func (h *GroupHandler) InviteMembers(c *gin.Context) { notImplemented(c, "GroupHandler.InviteMembers") }
+//
+// 群成员都能邀请（Java 行为），已在群里的人由存储层去重跳过。
+func (h *GroupHandler) InviteMembers(c *gin.Context) {
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+	groupID, ok := parseUintParam(c, "groupId")
+	if !ok {
+		return
+	}
+	if !h.groups.IsMember(groupID, userID) {
+		c.JSON(http.StatusForbidden, response.ErrorWithCode("not a group member", http.StatusForbidden))
+		return
+	}
+
+	var req model.InviteMembersRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorWithCode("invalid request body: "+err.Error(), http.StatusBadRequest))
+		return
+	}
+	if len(req.UserIDs) > 200 {
+		c.JSON(http.StatusBadRequest, response.ErrorWithCode("too many members in one request", http.StatusBadRequest))
+		return
+	}
+
+	added := h.groups.AddMembers(groupID, req.UserIDs)
+	memberCount := 0
+	if group, err := h.groups.Get(groupID); err == nil {
+		h.convs.AddMembers(group.ConversationID, req.UserIDs)
+		memberCount = group.MemberCount
+	}
+
+	c.JSON(http.StatusOK, response.Success(gin.H{"added": added, "member_count": memberCount}))
+}
 
 // RemoveMember DELETE /api/group/groups/:groupId/members/:userId
-// TODO: 谁能踢人、能不能踢自己、群主能不能被踢 —— 三条规则写清楚再动手。
-func (h *GroupHandler) RemoveMember(c *gin.Context) { notImplemented(c, "GroupHandler.RemoveMember") }
+//
+// 规则：
+//   - 自己退群：允许；
+//   - 群主/管理员踢人：允许；
+//   - 普通成员踢别人：403；
+//   - 群主不能被踢（必须先转让）。
+func (h *GroupHandler) RemoveMember(c *gin.Context) {
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+	groupID, ok := parseUintParam(c, "groupId")
+	if !ok {
+		return
+	}
+	targetID, ok := parseUintParam(c, "userId")
+	if !ok {
+		return
+	}
 
-// GetGroupMessages GET /api/group/groups/:groupId/messages
-// TODO: 和消息列表同一套游标分页（(create_time,id) 元组），返回 {items, next_cursor}；
-//       别在这里退回 limit/offset —— 群消息是最容易翻到深页的场景。
+	role := h.groups.Role(groupID, userID)
+	if role < 0 {
+		c.JSON(http.StatusForbidden, response.ErrorWithCode("not a group member", http.StatusForbidden))
+		return
+	}
+	if targetID != userID && role < model.GroupRoleAdmin {
+		c.JSON(http.StatusForbidden, response.ErrorWithCode("no permission to remove this member", http.StatusForbidden))
+		return
+	}
+	if h.groups.Role(groupID, targetID) == model.GroupRoleOwner {
+		c.JSON(http.StatusBadRequest, response.ErrorWithCode("the owner cannot be removed; transfer ownership first", http.StatusBadRequest))
+		return
+	}
+
+	h.groups.RemoveMember(groupID, targetID)
+	if group, err := h.groups.Get(groupID); err == nil {
+		h.convs.RemoveMember(group.ConversationID, targetID)
+	}
+
+	c.JSON(http.StatusOK, response.SuccessNoData("member removed"))
+}
+
+// GetGroupMessages GET /api/group/groups/:groupId/messages?cursor=&limit=
 func (h *GroupHandler) GetGroupMessages(c *gin.Context) {
-	notImplemented(c, "GroupHandler.GetGroupMessages")
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+	groupID, ok := parseUintParam(c, "groupId")
+	if !ok {
+		return
+	}
+	if !h.groups.IsMember(groupID, userID) {
+		c.JSON(http.StatusForbidden, response.ErrorWithCode("not a group member", http.StatusForbidden))
+		return
+	}
+
+	group, err := h.groups.Get(groupID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, response.ErrorWithCode("group not found", http.StatusNotFound))
+		return
+	}
+
+	var cursor uint64
+	if raw := c.Query("cursor"); raw != "" {
+		v, err := strconv.ParseUint(raw, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, response.ErrorWithCode("invalid cursor", http.StatusBadRequest))
+			return
+		}
+		cursor = v
+	}
+
+	limit := 20
+	if raw := c.Query("limit"); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil && v > 0 {
+			limit = v
+		}
+	}
+
+	items, nextCursor, hasMore := h.messages.GetByConversation(group.ConversationID, cursor, limit)
+	if items == nil {
+		items = []*model.Message{}
+	}
+	next := ""
+	if hasMore {
+		next = strconv.FormatUint(nextCursor, 10)
+	}
+	c.JSON(http.StatusOK, response.Success(model.GroupMessagesPage{Items: items, NextCursor: next}))
 }
 
 // SendGroupImage POST /api/group/messages/image
-// TODO: multipart 上传（字段名 file）；校验大小/类型，落盘后再写消息记录。
-func (h *GroupHandler) SendGroupImage(c *gin.Context) { notImplemented(c, "GroupHandler.SendGroupImage") }
+func (h *GroupHandler) SendGroupImage(c *gin.Context) { h.sendGroupMedia(c, 2, true) }
 
 // SendGroupFile POST /api/group/messages/file
-// TODO: 同图片，但要额外注意文件名清洗（防路径穿越 ../）和下载鉴权。
-func (h *GroupHandler) SendGroupFile(c *gin.Context) { notImplemented(c, "GroupHandler.SendGroupFile") }
+func (h *GroupHandler) SendGroupFile(c *gin.Context) { h.sendGroupMedia(c, 3, false) }
 
 // SendGroupText POST /api/group/messages/text
-// TODO: 前端 index.js 里已有调用，但 Java 版没有对应方法（估计当时走 WebSocket）。
-//       现在先按 HTTP 落库实现，阶段 3 换 WebSocket Hub 后这里作为 HTTP 兜底保留。
-func (h *GroupHandler) SendGroupText(c *gin.Context) { notImplemented(c, "GroupHandler.SendGroupText") }
+//
+// 前端已有这个调用但 Java 版没有对应方法（当时走 WebSocket）。
+// 阶段 1 用 HTTP 落库实现，阶段 3 换 WebSocket Hub 后作为兜底保留。
+func (h *GroupHandler) SendGroupText(c *gin.Context) {
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+
+	var req struct {
+		GroupID uint64 `json:"group_id" binding:"required"`
+		Content string `json:"content" binding:"required,max=4000"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorWithCode("invalid request body: "+err.Error(), http.StatusBadRequest))
+		return
+	}
+
+	group, err := h.groups.Get(req.GroupID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, response.ErrorWithCode("group not found", http.StatusNotFound))
+		return
+	}
+	if !h.groups.IsMember(req.GroupID, userID) {
+		c.JSON(http.StatusForbidden, response.ErrorWithCode("not a group member", http.StatusForbidden))
+		return
+	}
+
+	msg := &model.Message{
+		ConversationID: group.ConversationID,
+		SenderID:       userID,
+		MsgType:        1,
+		Content:        req.Content,
+		Status:         0,
+	}
+	if err := h.messages.Create(msg); err != nil {
+		c.JSON(http.StatusInternalServerError, response.ErrorWithCode("failed to save message", http.StatusInternalServerError))
+		return
+	}
+	h.convs.Touch(group.ConversationID, msg.ID)
+	c.JSON(http.StatusOK, response.Success(msg))
+}
+
+// sendGroupMedia 上传群图片/文件。
+func (h *GroupHandler) sendGroupMedia(c *gin.Context, msgType int, imagesOnly bool) {
+	userID, ok := requireUser(c)
+	if !ok {
+		return
+	}
+
+	groupID, ok := parseUintQuery(c, "group_id")
+	if !ok {
+		return
+	}
+	if groupID == 0 {
+		if id, ok := parseUintQuery(c, "id"); ok {
+			groupID = id
+		}
+	}
+	if groupID == 0 {
+		c.JSON(http.StatusBadRequest, response.ErrorWithCode("group_id is required", http.StatusBadRequest))
+		return
+	}
+
+	group, err := h.groups.Get(groupID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, response.ErrorWithCode("group not found", http.StatusNotFound))
+		return
+	}
+	if !h.groups.IsMember(groupID, userID) {
+		c.JSON(http.StatusForbidden, response.ErrorWithCode("not a group member", http.StatusForbidden))
+		return
+	}
+
+	url, err := saveUpload(c, "file", imagesOnly)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorWithCode("upload failed: "+err.Error(), http.StatusBadRequest))
+		return
+	}
+
+	msg := &model.Message{
+		ConversationID: group.ConversationID,
+		SenderID:       userID,
+		MsgType:        msgType,
+		Content:        url,
+		Status:         0,
+	}
+	if err := h.messages.Create(msg); err != nil {
+		c.JSON(http.StatusInternalServerError, response.ErrorWithCode("failed to save message", http.StatusInternalServerError))
+		return
+	}
+	h.convs.Touch(group.ConversationID, msg.ID)
+	c.JSON(http.StatusOK, response.Success(msg))
+}

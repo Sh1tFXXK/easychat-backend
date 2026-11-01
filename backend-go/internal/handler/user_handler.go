@@ -4,21 +4,25 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/Sh1tFXXK/easychat-backend/backend-go/internal/model"
 	"github.com/Sh1tFXXK/easychat-backend/backend-go/internal/response"
 	"github.com/Sh1tFXXK/easychat-backend/backend-go/internal/store"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // UserHandler is the Go counterpart of the Java UserController.
 type UserHandler struct {
-	store store.UserStore
+	store   store.UserStore
+	friends store.FriendStore
+	verify  store.VerifyStore
 }
 
-// NewUserHandler creates a UserHandler backed by the given UserStore.
-func NewUserHandler(s store.UserStore) *UserHandler {
-	return &UserHandler{store: s}
+// NewUserHandler creates a UserHandler with its dependencies.
+func NewUserHandler(s store.UserStore, friends store.FriendStore, verify store.VerifyStore) *UserHandler {
+	return &UserHandler{store: s, friends: friends, verify: verify}
 }
 
 // Register godoc
@@ -32,7 +36,7 @@ func (h *UserHandler) Register(c *gin.Context) {
 	}
 
 	exists, err := h.store.Exists(req.Username)
-	if err != nil {            
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.Error("failed to check username"))
 		return
 	}
@@ -41,10 +45,22 @@ func (h *UserHandler) Register(c *gin.Context) {
 		return
 	}
 
+	hash, err := hashPassword(req.Password)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorWithCode("invalid password: "+err.Error(), http.StatusBadRequest))
+		return
+	}
+
+	nickname := req.Nickname
+	if strings.TrimSpace(nickname) == "" {
+		nickname = req.Username
+	}
+
 	user := &model.User{
-		Username:     req.Username,
-		PasswordHash: req.Password, // TODO: hash with bcrypt before persisting
-		Nickname:     req.Nickname,
+		Username:     strings.TrimSpace(req.Username),
+		PasswordHash: hash,
+		Nickname:     nickname,
+		Tags:         []string{},
 		Status:       1,
 	}
 	if err := h.store.Create(user); err != nil {
@@ -74,13 +90,14 @@ func (h *UserHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, response.Error("invalid credentials"))
 		return
 	}
-	// TODO: compare bcrypt hash instead of plaintext
-	if user.PasswordHash != req.Password {
+	// 密码比对必须走 bcrypt（恒定时间），不能用字符串比较。
+	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)) != nil {
 		c.JSON(http.StatusUnauthorized, response.Error("invalid credentials"))
 		return
 	}
 
-	c.JSON(http.StatusOK, response.SuccessMsg("login successful", gin.H{
+	// 这是骨架期的兼容接口；正式的登录（含 token 签发）走 POST /auth/login。
+	c.JSON(http.StatusOK, response.SuccessMsg("login successful, use /auth/login for a token", gin.H{
 		"userId": user.ID,
 		"user":   user.ToPublic(),
 	}))

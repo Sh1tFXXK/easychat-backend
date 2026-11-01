@@ -40,24 +40,6 @@ var itemTypeWhitelist = map[string]struct{}{
 	"FILE":    {},
 }
 
-// currentUserID 从请求中提取当前用户。
-//
-// 当前实现：读 X-User-ID 请求头 —— 这是**过渡方案，绝对不是生产方案**。
-// 任何客户端都能伪造这个头，等于没有鉴权。
-// 下一步要换成 JWT/会话中间件：中间件校验签名后把 userID 塞进 c.Set，
-// 这里只负责取值。把这个 TODO 留着，面试被问「你怎么做鉴权」时这就是你的答题切入点。
-func currentUserID(c *gin.Context) (uint64, bool) {
-	raw := c.GetHeader("X-User-ID")
-	if raw == "" {
-		return 0, false
-	}
-	id, err := strconv.ParseUint(raw, 10, 64)
-	if err != nil || id == 0 {
-		return 0, false
-	}
-	return id, true
-}
-
 // AddFavorite godoc
 // POST /api/favorites
 //

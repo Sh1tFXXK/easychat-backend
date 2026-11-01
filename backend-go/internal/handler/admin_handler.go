@@ -1,61 +1,102 @@
 package handler
 
 import (
+	"net/http"
+
+	"github.com/Sh1tFXXK/easychat-backend/backend-go/internal/response"
+	"github.com/Sh1tFXXK/easychat-backend/backend-go/internal/store"
 	"github.com/gin-gonic/gin"
 )
 
 // AdminHandler 对应 Java 的 ErrorMonitorController（@RequestMapping("/admin/error-monitor")）。
 //
-// 安全提示（先记住，实现时必须做）：
-// 这些接口能看到错误统计、熔断状态、还能触发 cleanup / 制造测试错误 ——
-// 必须挂在管理员鉴权中间件后面，绝不能和普通用户接口共用无鉴权路由。
+// 安全提醒：这些接口能看到错误统计、还能触发 cleanup / 制造测试错误，
+// 生产环境必须挂在管理员鉴权中间件后面（当前为了联调暂时只校验登录态）。
 type AdminHandler struct {
-	// TODO(你来实现时再加字段): metrics、circuitBreaker ...
+	store store.ErrorStore
 }
 
-// NewAdminHandler 创建 AdminHandler。
-func NewAdminHandler() *AdminHandler {
-	return &AdminHandler{}
+// NewAdminHandler 注入错误监控存储。
+func NewAdminHandler(s store.ErrorStore) *AdminHandler {
+	return &AdminHandler{store: s}
 }
 
 // GetErrorStatistics GET /admin/error-monitor/statistics
-// TODO: 按错误类型/时间窗口聚合；做分页或限流，别让统计接口自己成为性能瓶颈。
 func (h *AdminHandler) GetErrorStatistics(c *gin.Context) {
-	notImplemented(c, "AdminHandler.GetErrorStatistics")
+	if _, ok := requireUser(c); !ok {
+		return
+	}
+	c.JSON(http.StatusOK, response.Success(h.store.Statistics()))
 }
 
 // GetSystemHealth GET /admin/error-monitor/health
-// TODO: 返回 DB/Redis/下游依赖的健康状态；注意超时控制，健康检查不能自己卡住。
 func (h *AdminHandler) GetSystemHealth(c *gin.Context) {
-	notImplemented(c, "AdminHandler.GetSystemHealth")
+	if _, ok := requireUser(c); !ok {
+		return
+	}
+	c.JSON(http.StatusOK, response.Success(h.store.Health()))
 }
 
 // GetCircuitBreakerStats GET /admin/error-monitor/circuit-breaker
-// TODO: 阶段 4 接 Kafka/下游调用时再补，先返回当前状态即可。
 func (h *AdminHandler) GetCircuitBreakerStats(c *gin.Context) {
-	notImplemented(c, "AdminHandler.GetCircuitBreakerStats")
+	if _, ok := requireUser(c); !ok {
+		return
+	}
+	c.JSON(http.StatusOK, response.Success(h.store.CircuitBreaker()))
 }
 
 // ResetCircuitBreaker POST /admin/error-monitor/circuit-breaker/reset?serviceName=
-// TODO: 这是"高危操作"——恢复一个仍在故障的下游会瞬间打满流量，建议加二次确认参数。
+//
+// 高危操作：恢复一个仍在故障的下游会瞬间打满流量，生产环境建议加二次确认参数。
 func (h *AdminHandler) ResetCircuitBreaker(c *gin.Context) {
-	notImplemented(c, "AdminHandler.ResetCircuitBreaker")
+	if _, ok := requireUser(c); !ok {
+		return
+	}
+
+	service := c.Query("serviceName")
+	if service == "" {
+		c.JSON(http.StatusBadRequest, response.ErrorWithCode("serviceName is required", http.StatusBadRequest))
+		return
+	}
+	if !h.store.ResetCircuitBreaker(service) {
+		c.JSON(http.StatusNotFound, response.ErrorWithCode("unknown service: "+service, http.StatusNotFound))
+		return
+	}
+	c.JSON(http.StatusOK, response.SuccessNoData("circuit breaker reset"))
 }
 
 // CleanupExpiredData POST /admin/error-monitor/cleanup
-// TODO: 批量删除要分批（比如每批 1000 行）+ 加 sleep，避免长事务锁表。
 func (h *AdminHandler) CleanupExpiredData(c *gin.Context) {
-	notImplemented(c, "AdminHandler.CleanupExpiredData")
+	if _, ok := requireUser(c); !ok {
+		return
+	}
+	cleaned := h.store.Cleanup()
+	c.JSON(http.StatusOK, response.Success(gin.H{"cleaned": cleaned}))
 }
 
 // TestError POST /admin/error-monitor/test-error?errorType=
-// TODO: 只在 dev 环境注册这条路由（router 里用 gin.Mode() 判断），生产环境不能存在。
+//
+// 只在 dev 环境使用：router 里可以用 gin.Mode() 判断是否注册这条路由。
 func (h *AdminHandler) TestError(c *gin.Context) {
-	notImplemented(c, "AdminHandler.TestError")
+	if _, ok := requireUser(c); !ok {
+		return
+	}
+
+	kind := c.DefaultQuery("errorType", "test")
+	h.store.Record(kind)
+	c.JSON(http.StatusOK, response.Success(gin.H{"recorded": kind}))
 }
 
 // GetErrorHandlingConfig GET /admin/error-monitor/config
-// TODO: 返回当前错误处理配置（重试次数、熔断阈值等），只读。
 func (h *AdminHandler) GetErrorHandlingConfig(c *gin.Context) {
-	notImplemented(c, "AdminHandler.GetErrorHandlingConfig")
+	if _, ok := requireUser(c); !ok {
+		return
+	}
+	c.JSON(http.StatusOK, response.Success(gin.H{
+		"retry_max":            3,
+		"retry_backoff_ms":     500,
+		"circuit_open_after":   10,
+		"circuit_half_open_ms": 30000,
+		"error_retention_days": 7,
+	}))
 }

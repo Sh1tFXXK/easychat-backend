@@ -5,14 +5,14 @@ import "time"
 // Message mirrors the `chat_messages` table from sql/01_core_tables.sql.
 // `id` is the cursor anchor for cursor-based pagination.
 type Message struct {
-	ID             uint64     `json:"id"`
-	MsgID          string     `json:"msg_id" db:"msg_id"`
-	ConversationID uint64     `json:"conversation_id" db:"conversation_id"`
-	SenderID       uint64     `json:"sender_id" db:"sender_id"`
-	MsgType        int        `json:"msg_type" db:"msg_type"`
-	Content        string     `json:"content"`
-	Status         int        `json:"status"`
-	CreateTime     time.Time  `json:"create_time" db:"create_time"`
+	ID             uint64    `json:"id"`
+	MsgID          string    `json:"msg_id" db:"msg_id"`
+	ConversationID uint64    `json:"conversation_id" db:"conversation_id"`
+	SenderID       uint64    `json:"sender_id" db:"sender_id"`
+	MsgType        int       `json:"msg_type" db:"msg_type"`
+	Content        string    `json:"content"`
+	Status         int       `json:"status"`
+	CreateTime     time.Time `json:"create_time" db:"create_time"`
 }
 
 // MessageListRequest is the query payload for GET /api/messages.

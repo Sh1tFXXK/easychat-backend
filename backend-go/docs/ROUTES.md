@@ -1,89 +1,96 @@
 # 路由清单（自动生成 · 共 81 条）
 
-由 `go run .` 的 GIN-debug 输出生成；`TODO 501` = 路由已挂、handler 待实现。
+由 `go run .` 的 GIN-debug 输出生成。阶段 1 全部接口已实现（内存 store）。
 
-| 方法 | 路径 | Handler | 状态 |
-|---|---|---|---|
-| GET | `/health` | 匿名函数 | 已实现 |
-| GET | `/healthz` | 匿名函数 | 已实现 |
-| GET | `/admin/error-monitor/circuit-breaker` | `AdminHandler.GetCircuitBreakerStats` | TODO 501 |
-| POST | `/admin/error-monitor/circuit-breaker/reset` | `AdminHandler.ResetCircuitBreaker` | TODO 501 |
-| POST | `/admin/error-monitor/cleanup` | `AdminHandler.CleanupExpiredData` | TODO 501 |
-| GET | `/admin/error-monitor/config` | `AdminHandler.GetErrorHandlingConfig` | TODO 501 |
-| GET | `/admin/error-monitor/health` | `AdminHandler.GetSystemHealth` | TODO 501 |
-| GET | `/admin/error-monitor/statistics` | `AdminHandler.GetErrorStatistics` | TODO 501 |
-| POST | `/admin/error-monitor/test-error` | `AdminHandler.TestError` | TODO 501 |
-| POST | `/api/auth/login` | `AuthHandler.Login` | TODO 501 |
-| POST | `/api/auth/logout` | `AuthHandler.Logout` | TODO 501 |
-| GET | `/api/chat/chats` | `ChatHandler.GetChats` | TODO 501 |
-| GET | `/api/chat/chats/chatHistory` | `ChatHandler.GetChatHistory` | TODO 501 |
-| POST | `/api/chat/chats/saveFileMsg` | `ChatHandler.SaveFileMsg` | TODO 501 |
-| POST | `/api/chat/chats/savePictureMsg` | `ChatHandler.SavePictureMsg` | TODO 501 |
-| POST | `/api/chat/chats/uploadVoice` | `ChatHandler.UploadVoice` | TODO 501 |
-| GET | `/api/favorites` | `FavoriteHandler.ListFavorites` | 已实现 |
-| POST | `/api/favorites` | `FavoriteHandler.AddFavorite` | 已实现 |
-| DELETE | `/api/favorites/:id` | `FavoriteHandler.DeleteFavorite` | 已实现 |
-| GET | `/api/favorites/:id` | `FavoriteHandler.GetFavorite` | 已实现 |
-| PUT | `/api/favorites/:id` | `FavoriteHandler.UpdateFavorite` | TODO 501 |
-| DELETE | `/api/favorites/batch` | `FavoriteHandler.BatchDeleteFavorites` | TODO 501 |
-| PUT | `/api/favorites/batch/category` | `FavoriteHandler.BatchUpdateCategory` | TODO 501 |
-| PUT | `/api/favorites/batch/tags/add` | `FavoriteHandler.BatchAddTags` | TODO 501 |
-| PUT | `/api/favorites/batch/tags/remove` | `FavoriteHandler.BatchRemoveTags` | TODO 501 |
-| GET | `/api/favorites/categories` | `FavoriteHandler.GetCategories` | TODO 501 |
-| POST | `/api/favorites/categories` | `FavoriteHandler.CreateCategory` | TODO 501 |
-| DELETE | `/api/favorites/categories/:id` | `FavoriteHandler.DeleteCategory` | TODO 501 |
-| PUT | `/api/favorites/categories/:id` | `FavoriteHandler.UpdateCategory` | TODO 501 |
-| POST | `/api/favorites/categories/init` | `FavoriteHandler.InitDefaultCategories` | TODO 501 |
-| GET | `/api/favorites/check-duplicate` | `FavoriteHandler.CheckDuplicate` | TODO 501 |
-| POST | `/api/favorites/search` | `FavoriteHandler.AdvancedSearch` | TODO 501 |
-| GET | `/api/favorites/statistics` | `FavoriteHandler.GetStatistics` | TODO 501 |
-| GET | `/api/favorites/tags` | `FavoriteHandler.GetTags` | TODO 501 |
-| POST | `/api/favorites/tags` | `FavoriteHandler.CreateTag` | TODO 501 |
-| DELETE | `/api/favorites/tags/:id` | `FavoriteHandler.DeleteTag` | TODO 501 |
-| DELETE | `/api/favorites/tags/cleanup` | `FavoriteHandler.CleanupTags` | TODO 501 |
-| GET | `/api/favorites/tags/popular` | `FavoriteHandler.GetPopularTags` | TODO 501 |
-| POST | `/api/group/groups` | `GroupHandler.CreateGroup` | TODO 501 |
-| DELETE | `/api/group/groups/:groupId` | `GroupHandler.DeleteGroup` | TODO 501 |
-| GET | `/api/group/groups/:groupId` | `GroupHandler.GetGroupDetail` | TODO 501 |
-| PUT | `/api/group/groups/:groupId` | `GroupHandler.UpdateGroup` | TODO 501 |
-| POST | `/api/group/groups/:groupId/members` | `GroupHandler.InviteMembers` | TODO 501 |
-| DELETE | `/api/group/groups/:groupId/members/:userId` | `GroupHandler.RemoveMember` | TODO 501 |
-| GET | `/api/group/groups/:groupId/messages` | `GroupHandler.GetGroupMessages` | TODO 501 |
-| POST | `/api/group/messages/file` | `GroupHandler.SendGroupFile` | TODO 501 |
-| POST | `/api/group/messages/image` | `GroupHandler.SendGroupImage` | TODO 501 |
-| POST | `/api/group/messages/text` | `GroupHandler.SendGroupText` | TODO 501 |
-| GET | `/api/group/users/:userId/groups` | `GroupHandler.GetUserGroups` | TODO 501 |
-| GET | `/api/messages` | `MessageHandler.ListMessages` | 已实现 |
-| POST | `/api/messages` | `MessageHandler.CreateMessage` | 已实现 |
-| GET | `/api/user/:id` | `UserHandler.GetUser` | 已实现 |
-| GET | `/api/user/friendVerify` | `UserHandler.GetFriendVerifyList` | TODO 501 |
-| GET | `/api/user/friends` | `UserHandler.GetFriendsList` | TODO 501 |
-| POST | `/api/user/login` | `UserHandler.Login` | 已实现 |
-| POST | `/api/user/notification/retry` | `NotificationHandler.RetryFailed` | TODO 501 |
-| PUT | `/api/user/notification/settings` | `NotificationHandler.UpdateSettings` | TODO 501 |
-| PUT | `/api/user/notification/template` | `NotificationHandler.SetTemplate` | TODO 501 |
-| POST | `/api/user/password/validate` | `UserHandler.ValidatePassword` | TODO 501 |
-| POST | `/api/user/register` | `UserHandler.Register` | 已实现 |
-| GET | `/api/user/search` | `UserHandler.SearchUser` | 已实现 |
-| DELETE | `/api/user/special-attention` | `SpecialAttentionHandler.RemoveAttention` | TODO 501 |
-| GET | `/api/user/special-attention` | `SpecialAttentionHandler.GetAttentionList` | TODO 501 |
-| POST | `/api/user/special-attention` | `SpecialAttentionHandler.AddAttention` | TODO 501 |
-| PUT | `/api/user/special-attention` | `SpecialAttentionHandler.UpdateAttention` | TODO 501 |
-| POST | `/api/user/special-attention/batch` | `SpecialAttentionHandler.BatchOperation` | TODO 501 |
-| DELETE | `/api/user/special-attention/by-user` | `SpecialAttentionHandler.RemoveAttentionByUser` | TODO 501 |
-| GET | `/api/user/special-attention/check` | `SpecialAttentionHandler.CheckAttentionStatus` | TODO 501 |
-| GET | `/api/user/special-attention/updates` | `SpecialAttentionHandler.GetAttentionUpdates` | TODO 501 |
-| GET | `/api/user/user` | `UserHandler.GetUser` | 已实现 |
-| POST | `/api/user/user/addTag` | `UserHandler.AddTag` | TODO 501 |
-| POST | `/api/user/user/changeAvatar` | `UserHandler.ChangeAvatar` | TODO 501 |
-| POST | `/api/user/user/changePassword` | `UserHandler.ChangePassword` | TODO 501 |
-| POST | `/api/user/user/edit` | `UserHandler.EditUser` | TODO 501 |
-| POST | `/api/user/user/removeTag` | `UserHandler.RemoveTag` | TODO 501 |
-| POST | `/api/user/username/validate` | `UserHandler.ValidateUsername` | 已实现 |
-| POST | `/api/user/verifyCode/send` | `UserHandler.SendVerifyCode` | TODO 501 |
-| POST | `/api/user/verifyCode/validate` | `UserHandler.ValidateVerifyCode` | TODO 501 |
-| POST | `/auth/login` | `AuthHandler.Login` | TODO 501 |
-| POST | `/auth/logout` | `AuthHandler.Logout` | TODO 501 |
-| POST | `/user/notification/retry` | `NotificationHandler.RetryFailed` | TODO 501 |
-| PUT | `/user/notification/settings` | `NotificationHandler.UpdateSettings` | TODO 501 |
-| PUT | `/user/notification/template` | `NotificationHandler.SetTemplate` | TODO 501 |
+| 方法 | 路径 | Handler |
+|---|---|---|
+| GET | `/admin/error-monitor/circuit-breaker` | `AdminHandler.GetCircuitBreakerStats` |
+| POST | `/admin/error-monitor/circuit-breaker/reset` | `AdminHandler.ResetCircuitBreaker` |
+| POST | `/admin/error-monitor/cleanup` | `AdminHandler.CleanupExpiredData` |
+| GET | `/admin/error-monitor/config` | `AdminHandler.GetErrorHandlingConfig` |
+| GET | `/admin/error-monitor/health` | `AdminHandler.GetSystemHealth` |
+| GET | `/admin/error-monitor/statistics` | `AdminHandler.GetErrorStatistics` |
+| POST | `/admin/error-monitor/test-error` | `AdminHandler.TestError` |
+| POST | `/api/auth/login` | `AuthHandler.Login` |
+| POST | `/api/auth/logout` | `AuthHandler.Logout` |
+| GET | `/api/chat/chats` | `ChatHandler.GetChats` |
+| GET | `/api/chat/chats/chatHistory` | `ChatHandler.GetChatHistory` |
+| POST | `/api/chat/chats/saveFileMsg` | `ChatHandler.SaveFileMsg` |
+| POST | `/api/chat/chats/savePictureMsg` | `ChatHandler.SavePictureMsg` |
+| POST | `/api/chat/chats/uploadVoice` | `ChatHandler.UploadVoice` |
+| GET | `/api/favorites` | `FavoriteHandler.ListFavorites` |
+| POST | `/api/favorites` | `FavoriteHandler.AddFavorite` |
+| DELETE | `/api/favorites/:id` | `FavoriteHandler.DeleteFavorite` |
+| GET | `/api/favorites/:id` | `FavoriteHandler.GetFavorite` |
+| PUT | `/api/favorites/:id` | `FavoriteHandler.UpdateFavorite` |
+| DELETE | `/api/favorites/batch` | `FavoriteHandler.BatchDeleteFavorites` |
+| PUT | `/api/favorites/batch/category` | `FavoriteHandler.BatchUpdateCategory` |
+| PUT | `/api/favorites/batch/tags/add` | `FavoriteHandler.BatchAddTags` |
+| PUT | `/api/favorites/batch/tags/remove` | `FavoriteHandler.BatchRemoveTags` |
+| GET | `/api/favorites/categories` | `FavoriteHandler.GetCategories` |
+| POST | `/api/favorites/categories` | `FavoriteHandler.CreateCategory` |
+| DELETE | `/api/favorites/categories/:id` | `FavoriteHandler.DeleteCategory` |
+| PUT | `/api/favorites/categories/:id` | `FavoriteHandler.UpdateCategory` |
+| POST | `/api/favorites/categories/init` | `FavoriteHandler.InitDefaultCategories` |
+| GET | `/api/favorites/check-duplicate` | `FavoriteHandler.CheckDuplicate` |
+| POST | `/api/favorites/search` | `FavoriteHandler.AdvancedSearch` |
+| GET | `/api/favorites/statistics` | `FavoriteHandler.GetStatistics` |
+| GET | `/api/favorites/tags` | `FavoriteHandler.GetTags` |
+| POST | `/api/favorites/tags` | `FavoriteHandler.CreateTag` |
+| DELETE | `/api/favorites/tags/:id` | `FavoriteHandler.DeleteTag` |
+| DELETE | `/api/favorites/tags/cleanup` | `FavoriteHandler.CleanupTags` |
+| GET | `/api/favorites/tags/popular` | `FavoriteHandler.GetPopularTags` |
+| POST | `/api/group/groups` | `GroupHandler.CreateGroup` |
+| DELETE | `/api/group/groups/:groupId` | `GroupHandler.DeleteGroup` |
+| GET | `/api/group/groups/:groupId` | `GroupHandler.GetGroupDetail` |
+| PUT | `/api/group/groups/:groupId` | `GroupHandler.UpdateGroup` |
+| POST | `/api/group/groups/:groupId/members` | `GroupHandler.InviteMembers` |
+| DELETE | `/api/group/groups/:groupId/members/:userId` | `GroupHandler.RemoveMember` |
+| GET | `/api/group/groups/:groupId/messages` | `GroupHandler.GetGroupMessages` |
+| POST | `/api/group/messages/file` | `GroupHandler.SendGroupFile` |
+| POST | `/api/group/messages/image` | `GroupHandler.SendGroupImage` |
+| POST | `/api/group/messages/text` | `GroupHandler.SendGroupText` |
+| GET | `/api/group/users/:userId/groups` | `GroupHandler.GetUserGroups` |
+| GET | `/api/messages` | `MessageHandler.ListMessages` |
+| POST | `/api/messages` | `MessageHandler.CreateMessage` |
+| GET | `/api/user/:id` | `UserHandler.GetUser` |
+| GET | `/api/user/friendVerify` | `UserHandler.GetFriendVerifyList` |
+| GET | `/api/user/friends` | `UserHandler.GetFriendsList` |
+| POST | `/api/user/login` | `UserHandler.Login` |
+| POST | `/api/user/notification/retry` | `NotificationHandler.RetryFailed` |
+| PUT | `/api/user/notification/settings` | `NotificationHandler.UpdateSettings` |
+| PUT | `/api/user/notification/template` | `NotificationHandler.SetTemplate` |
+| POST | `/api/user/password/validate` | `UserHandler.ValidatePassword` |
+| POST | `/api/user/register` | `UserHandler.Register` |
+| GET | `/api/user/search` | `UserHandler.SearchUser` |
+| DELETE | `/api/user/special-attention` | `SpecialAttentionHandler.RemoveAttention` |
+| GET | `/api/user/special-attention` | `SpecialAttentionHandler.GetAttentionList` |
+| POST | `/api/user/special-attention` | `SpecialAttentionHandler.AddAttention` |
+| PUT | `/api/user/special-attention` | `SpecialAttentionHandler.UpdateAttention` |
+| POST | `/api/user/special-attention/batch` | `SpecialAttentionHandler.BatchOperation` |
+| DELETE | `/api/user/special-attention/by-user` | `SpecialAttentionHandler.RemoveAttentionByUser` |
+| GET | `/api/user/special-attention/check` | `SpecialAttentionHandler.CheckAttentionStatus` |
+| GET | `/api/user/special-attention/updates` | `SpecialAttentionHandler.GetAttentionUpdates` |
+| GET | `/api/user/user` | `UserHandler.GetUser` |
+| POST | `/api/user/user/addTag` | `UserHandler.AddTag` |
+| POST | `/api/user/user/changeAvatar` | `UserHandler.ChangeAvatar` |
+| POST | `/api/user/user/changePassword` | `UserHandler.ChangePassword` |
+| POST | `/api/user/user/edit` | `UserHandler.EditUser` |
+| POST | `/api/user/user/removeTag` | `UserHandler.RemoveTag` |
+| POST | `/api/user/username/validate` | `UserHandler.ValidateUsername` |
+| POST | `/api/user/verifyCode/send` | `UserHandler.SendVerifyCode` |
+| POST | `/api/user/verifyCode/validate` | `UserHandler.ValidateVerifyCode` |
+| POST | `/auth/login` | `AuthHandler.Login` |
+| POST | `/auth/logout` | `AuthHandler.Logout` |
+| POST | `/user/notification/retry` | `NotificationHandler.RetryFailed` |
+| PUT | `/user/notification/settings` | `NotificationHandler.UpdateSettings` |
+| PUT | `/user/notification/template` | `NotificationHandler.SetTemplate` |
+
+## 健康检查
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/health` | 存活探针 |
+| GET | `/healthz` | 同上 |
+
+> 上传文件通过 `/uploads/<name>` 静态访问。
