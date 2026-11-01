@@ -12,7 +12,8 @@ cd backend-go
 go run .          # :8080
 ```
 
-完整路由清单见 [`backend-go/docs/ROUTES.md`](backend-go/docs/ROUTES.md)（81 条）。
+完整路由清单见 [`backend-go/docs/ROUTES.md`](backend-go/docs/ROUTES.md)（81 条）；
+阶段 1 的 EXPLAIN 实跑输出见 [`docs/evidence/02_explain_result.txt`](docs/evidence/02_explain_result.txt)。
 
 ## 路线
 
