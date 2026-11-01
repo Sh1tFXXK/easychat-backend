@@ -16,7 +16,7 @@ import (
 //	/api/favorites/... 收藏
 //
 // 只在这里集中增删路由 —— handler 只负责业务，不自己注册。
-func SetupRouter(userStore store.UserStore, messageStore store.MessageStore) *gin.Engine {
+func SetupRouter(userStore store.UserStore, messageStore store.MessageStore, favoriteStore store.FavoriteStore) *gin.Engine {
 	r := gin.Default()
 
 	// Health check
@@ -30,7 +30,7 @@ func SetupRouter(userStore store.UserStore, messageStore store.MessageStore) *gi
 	userHandler := handler.NewUserHandler(userStore)
 	messageHandler := handler.NewMessageHandler(messageStore)
 	chatHandler := handler.NewChatHandler(messageStore)
-	favoriteHandler := handler.NewFavoriteHandler()
+	favoriteHandler := handler.NewFavoriteHandler(favoriteStore)
 
 	api := r.Group("/api")
 	{
