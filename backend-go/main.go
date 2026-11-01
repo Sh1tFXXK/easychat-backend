@@ -1,8 +1,23 @@
-package main
+package main 
 
 import (
-  "gin"
+	"log"
+
+	"github.com/Sh1tFXXK/easychat-backend/backend-go/internal/router"
+	"github.com/Sh1tFXXK/easychat-backend/backend-go/internal/store"
 )
-func main () {
-		
-  }
+
+func main() {
+	// In-memory store for the Go rewrite (phase 1). Swap in a MySQL-backed
+	// store later once the database layer is wired up.
+	userStore := store.NewInMemoryUserStore()
+	messageStore := store.NewInMemoryMessageStore()
+
+	r := router.SetupRouter(userStore, messageStore)
+
+	log.Println("easychat-go backend listening on :8080")
+	if err := r.Run(":8080"); err != nil {
+		log.Fatalf("server failed: %v", err)
+	}
+}
+

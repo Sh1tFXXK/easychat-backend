@@ -32,7 +32,7 @@ func (h *UserHandler) Register(c *gin.Context) {
 	}
 
 	exists, err := h.store.Exists(req.Username)
-	if err != nil {
+	if err != nil {            
 		c.JSON(http.StatusInternalServerError, response.Error("failed to check username"))
 		return
 	}

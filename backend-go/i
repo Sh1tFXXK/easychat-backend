@@ -1,0 +1,13 @@
+package handler
+
+import (
+
+)
+
+type ChatHandler struct {
+    store store.ChatStore
+  }
+
+func (h * ChatHandler) GetChat( c *gin.Context) {
+    
+  }
